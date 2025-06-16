@@ -48,7 +48,7 @@
 #'   direction = "taxa"
 #' )
 #' }
-pathway_sdaa <- function(
+pathway_sdaa_v2 <- function(
     stratified_path,
     physeq,
     taxon_level = "Genus",
