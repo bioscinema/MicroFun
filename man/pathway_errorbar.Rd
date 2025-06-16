@@ -98,7 +98,7 @@ metadata <- read_delim(
 )
 # data(metadata)
 
-ko_abundance <- read.delim("path/to/your/metacyc_abundance.tsv")
+metacyc_abundance <- read.delim("path/to/your/metacyc_abundance.tsv")
 
 # data(metacyc_abundance)
 

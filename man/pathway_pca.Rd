@@ -73,7 +73,7 @@ pca_plot <- pathway_pca(
   colors = c("blue", "red")  # One color per group
 )
 
-\donttest{
+\dontrun{
 # Example with real data
 data("metacyc_abundance")  # Load example pathway abundance data
 data("metadata")          # Load example metadata

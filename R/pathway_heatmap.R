@@ -30,7 +30,7 @@
 #' @importFrom ggh4x facet_nested strip_nested elem_list_rect
 #'
 #' @examples
-#' \donttest{
+#' \dontrun{
 #' library(ggpicrust2)
 #' library(ggh4x)
 #' library(dplyr)
@@ -98,48 +98,48 @@ pathway_heatmap <- function(abundance,
   if (!is.matrix(abundance) && !is.data.frame(abundance)) {
     stop("abundance must be a data frame or matrix")
   }
-  
+
   # Ensure abundance is a matrix
   abundance <- as.matrix(abundance)
-  
+
   # Check sample count
   if (ncol(abundance) < 2) {
     stop("At least two samples are required for creating a heatmap")
   }
-  
+
   # Check pathway count
   if (nrow(abundance) < 1) {
     stop("At least one pathway is required")
   }
-  
+
   # Ensure column names exist
   if (is.null(colnames(abundance))) {
     colnames(abundance) <- paste0("Sample", seq_len(ncol(abundance)))
   }
-  
+
   # Ensure row names exist
   if (is.null(rownames(abundance))) {
     rownames(abundance) <- paste0("Pathway", seq_len(nrow(abundance)))
   }
-  
+
   if (!is.data.frame(metadata)) {
     stop("metadata must be a data frame")
   }
-  
+
   if (!is.character(group) || length(group) != 1) {
     stop("group must be a single character string")
   }
-  
+
   if (!is.null(colors) && !is.character(colors)) {
     stop("colors must be NULL or a character vector of color codes")
   }
-  
+
   # Check group count
   group_levels <- unique(metadata[[group]])
   if (length(group_levels) < 2) {
     stop("At least two groups are required for comparison")
   }
-  
+
   # Heatmaps use color changes to visualize changes in values. However, if the
   # data for plotting the heat map are too different, for example, if the heat
   # map is plotted using gene expression data, gene1 is expressed above 1000 in
@@ -188,8 +188,8 @@ pathway_heatmap <- function(abundance,
     tibble::rownames_to_column() %>%
     tidyr::pivot_longer(cols = -rowname,
                         names_to = "Sample",
-                        values_to = "Value") %>% 
-    left_join(metadata %>% select(all_of(c("sample_name",group))), 
+                        values_to = "Value") %>%
+    left_join(metadata %>% select(all_of(c("sample_name",group))),
               by = c("Sample" = "sample_name"))
 
   # Set the order of the samples in the heatmap
@@ -240,12 +240,12 @@ pathway_heatmap <- function(abundance,
         ticks = TRUE,
         label = TRUE
       )
-    ) + 
+    ) +
     ggh4x::facet_nested(
-      cols = vars(!!sym(group)), 
-      space = "free", 
-      scale = "free", 
-      switch = "x", 
+      cols = vars(!!sym(group)),
+      space = "free",
+      scale = "free",
+      switch = "x",
       strip = ggh4x::strip_nested(
         background_x = ggh4x::elem_list_rect(fill = colors)
       )
@@ -254,11 +254,11 @@ pathway_heatmap <- function(abundance,
   if (!show_row_names) {
     p <- p + theme(axis.text.y = element_blank())
   }
-  
+
   if (!show_legend) {
     p <- p + theme(legend.position = "none")
   }
-  
+
   if (!is.null(custom_theme)) {
     p <- p + custom_theme
   }

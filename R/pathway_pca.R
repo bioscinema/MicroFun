@@ -64,7 +64,7 @@
 #'   colors = c("blue", "red")  # One color per group
 #' )
 #'
-#' \donttest{
+#' \dontrun{
 #' # Example with real data
 #' data("metacyc_abundance")  # Load example pathway abundance data
 #' data("metadata")          # Load example metadata
@@ -103,7 +103,7 @@ pathway_pca <- function(abundance,
   if (missing(group)) {
     stop("Group variable name is required")
   }
-  
+
   # Check abundance matrix
   if (!is.matrix(abundance) && !is.data.frame(abundance)) {
     stop("Abundance must be a matrix or data frame")
@@ -120,7 +120,7 @@ pathway_pca <- function(abundance,
   if (ncol(abundance) < 3) {
     stop("Abundance matrix must contain at least 3 samples")
   }
-  
+
   # Check metadata
   if (!is.data.frame(metadata)) {
     stop("Metadata must be a data frame")
@@ -131,7 +131,7 @@ pathway_pca <- function(abundance,
   if (!group %in% colnames(metadata)) {
     stop(sprintf("Group column '%s' not found in metadata", group))
   }
-  
+
   # Check sample names match
   if (length(unique(metadata$sample_name)) != ncol(abundance)) {
     stop("Number of unique samples in metadata does not match abundance matrix")
@@ -139,7 +139,7 @@ pathway_pca <- function(abundance,
   if (!all(colnames(abundance) %in% metadata$sample_name)) {
     stop("Some sample names in abundance matrix are not found in metadata")
   }
-  
+
   # Check group variable
   group_values <- metadata[[group]]
   if (length(unique(group_values)) < 1) {
@@ -149,7 +149,7 @@ pathway_pca <- function(abundance,
     warning("Converting group variable to factor")
     metadata[[group]] <- factor(group_values)
   }
-  
+
   # Check colors if provided
   if (!is.null(colors)) {
     if (!is.vector(colors) || !is.character(colors)) {
@@ -160,14 +160,14 @@ pathway_pca <- function(abundance,
     }
     levels <- length(levels(factor(metadata[[group]])))
     if (length(colors) != levels) {
-      stop(sprintf("Number of colors (%d) does not match number of groups (%d)", 
+      stop(sprintf("Number of colors (%d) does not match number of groups (%d)",
                   length(colors), levels))
     }
   }
 
   # due to NSE notes in R CMD check
   PC1 = PC2 = Group = NULL
-  
+
   # Perform PCA on the abundance data, keeping the first two principal components
   pca_axis <- stats::prcomp(t(abundance), center = TRUE, scale = TRUE)$x[,1:2]
 
