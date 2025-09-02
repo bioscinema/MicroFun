@@ -20,7 +20,6 @@ The input file should be in .tsv, .txt, or .csv format.
 }
 \examples{
 \dontrun{
-library(ggpicrust2)
 library(readr)
 
 # Example 1: Demonstration with a hypothetical input file
@@ -34,15 +33,6 @@ kegg_abundance <- ko2kegg_abundance(file = input_file)
 # Alternatively, read the data from a file and use the data argument
 file_path <- "path/to/your/picrust2/results/pred_metagenome_unstrat.tsv"
 ko_abundance <- read_delim(file_path, delim = "\t")
-kegg_abundance <- ko2kegg_abundance(data = ko_abundance)
-
-# Example 2: Working with real data
-# In this case, we're using an existing dataset from the ggpicrust2 package.
-
-# Load the data
-data(ko_abundance)
-
-# Apply the ko2kegg_abundance function to our real dataset
 kegg_abundance <- ko2kegg_abundance(data = ko_abundance)
 }
 }

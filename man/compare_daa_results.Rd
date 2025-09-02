@@ -23,13 +23,12 @@ A data frame with the comparison results. The data frame has the following colum
 }
 \description{
 This function compares the consistency and inconsistency of statistically significant features obtained
-using different methods in `pathway_daa` from the `ggpicrust2` package. It creates a report showing the number of common and
+using different methods in `pathway_daa`. It creates a report showing the number of common and
 different features identified by each method, and the features themselves.
 }
 \examples{
 \donttest{
 library(magrittr)
-library(ggpicrust2)
 library(tibble)
 data("metacyc_abundance")
 data("metadata")

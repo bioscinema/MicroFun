@@ -20,9 +20,6 @@ A data frame with 10 variables:
   \item{pathway_name}{Name of the pathway.}
 }
 }
-\source{
-From ggpicrust2 package demonstration.
-}
 \usage{
 daa_annotated_results_df
 }

@@ -17,6 +17,5 @@
 #'   \item{pathway_map}{Map of the pathway.}
 #'   \item{pathway_name}{Name of the pathway.}
 #' }
-#' @source From ggpicrust2 package demonstration.
 #' @references Douglas GM, Maffei VJ, Zaneveld J, Yurgel SN, Brown JR, Taylor CM, Huttenhower C, Langille MGI. PICRUSt2 for prediction of metagenome functions. Nat Biotechnol. 2020.
 "daa_annotated_results_df"

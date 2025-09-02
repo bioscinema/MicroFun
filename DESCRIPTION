@@ -43,7 +43,11 @@ Imports:
     data.table,
     forcats,
     rlang,
-    stringr
+    stringr,
+    RColorBrewer,
+    ggraph,
+    igraph,
+    scales
 Depends: 
     R (>= 2.10)
 Suggests: 
