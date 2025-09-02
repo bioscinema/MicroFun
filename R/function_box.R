@@ -65,28 +65,47 @@ function_box <- function(stratified_path, pathway_sdaa_result, physeq, taxon_lev
 
   result_list_merged <- list()
   for (i in seq_along(result_list_subset)) {
-    asv <- names(result_list_subset)[i]
+    asv   <- names(result_list_subset)[i]
     level <- tax_table_df[tax_table_df$ASV == asv, taxon_level]
-    if (length(level) == 0 || is.na(level) || level == "") {
-      level <- "unknown"
+    if (length(level) == 0 || is.na(level) || level == "" ) {
+      next
     }
-    dt <- result_list_subset[[i]]
+    if (tolower(level) == "unknown" || tolower(level) == "uncultured") next
 
-    if (!"function" %in% colnames(dt)) next
+    dt <- as.data.table(result_list_subset[[i]])
+    if (!"function" %in% names(dt) || ncol(dt) <= 1L) next
 
-    dt_long <- melt(dt, id.vars = "function")
-    colnames(dt_long) <- c("function", "sample", "value")
+    # long format for this ASV/taxon
+    dt_long <- melt(
+      dt,
+      id.vars       = "function",
+      variable.name = "sample",
+      value.name    = "value"
+    )
 
     if (level %in% names(result_list_merged)) {
-      existing <- result_list_merged[[level]]
-      existing_long <- melt(existing, id.vars = "function")
-      colnames(existing_long) <- c("function", "sample", "value")
+      # existing table for this level → melt too
+      existing      <- as.data.table(result_list_merged[[level]])
+      existing_long <- melt(
+        existing,
+        id.vars       = "function",
+        variable.name = "sample",
+        value.name    = "value"
+      )
 
-      combined <- rbind(existing_long, dt_long)
-      combined <- aggregate(value ~ `function` + sample, data = combined, sum)
-      result_list_merged[[level]] <- dcast(combined, `function` ~ sample, value.var = "value", fill = 0)
+      # combine and sum duplicates (function × sample)
+      combined <- rbindlist(list(existing_long, dt_long), use.names = TRUE, fill = TRUE)
+      combined <- combined[, .(value = sum(value, na.rm = TRUE)), by = .(`function`, sample)]
+
+      # back to wide: rows = function, cols = sample
+      result_list_merged[[level]] <- dcast(
+        combined,
+        `function` ~ sample,
+        value.var = "value",
+        fill = 0
+      )
     } else {
-      result_list_merged[[level]] <- dt
+      result_list_merged[[level]] <- dt  # keep as data.table
     }
   }
 
@@ -116,13 +135,14 @@ function_box <- function(stratified_path, pathway_sdaa_result, physeq, taxon_lev
                            by.x = "function_num", by.y = "feature_num", all.x = TRUE)
     # Remove NA or empty pathway names
     genus_df_long <- genus_df_long[!is.na(genus_df_long$pathway_name) & genus_df_long$pathway_name != "", ]
-
+    eps <- 1e-6
+    genus_df_long[, abundance_log := log10(pmax(abundance, 0) + eps)]
     if (nrow(genus_df_long) == 0) next
 
 
-    p <- ggplot(genus_df_long, aes(x = pathway_name, y = abundance, fill = get(group))) +
+    p <- ggplot(genus_df_long, aes(x = pathway_name, y = abundance_log, fill = group)) +
       geom_boxplot() +
-      labs(title = genus, x = "Function", y = "Abundance",fill=group) +
+      labs(title = genus, x = "Function", y = "Log abundance",fill=group) +
       theme_minimal() +
       theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
