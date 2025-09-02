@@ -23,6 +23,8 @@ pathway_annotation(
 \item{ko_to_kegg}{A logical, decide if convert KO abundance to KEGG pathway abundance. Default is FALSE. Set to TRUE when using the function for the second use case.}
 
 \item{organism}{A character string specifying the KEGG organism code (e.g., 'hsa' for human, 'eco' for E. coli). Default is NULL, which retrieves generic KO information not specific to any organism. Only used when ko_to_kegg is TRUE.}
+
+\item{threshold}{numeric. Adjusted p-value (or score) cutoff used to retain, default is 0.05}
 }
 \value{
 A data frame with annotated pathway information.

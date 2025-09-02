@@ -39,7 +39,8 @@ Imports:
     magrittr,
     networkD3,
     phyloseq,
-    reshape2
+    reshape2,
+    data.table
 Depends: 
     R (>= 2.10)
 Suggests: 

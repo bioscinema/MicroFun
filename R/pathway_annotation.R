@@ -49,7 +49,7 @@ load_reference_data <- function(pathway_type) {
   }
 
   ref_file <- sprintf("%s_reference.RData", pathway_type)
-  ref_path <- system.file("extdata", ref_file, package = "ggpicrust2")
+  ref_path <- system.file("extdata", ref_file, package = "MicroFun")
 
   if (!file.exists(ref_path)) {
     stop("Reference data file not found: ", ref_file)
@@ -178,7 +178,7 @@ get_kegg_with_cache <- function(ko_id, organism = NULL) {
 #' @param max_attempts Maximum number of retry attempts
 #' @return Result or error
 #' @noRd
-with_retry <- function(expr, max_attempts = getOption("ggpicrust2.max_retries", 3)) {
+with_retry <- function(expr, max_attempts = getOption("MicroFun.max_retries", 3)) {
   attempt <- 1
 
   while (attempt <= max_attempts) {
@@ -226,7 +226,7 @@ with_retry <- function(expr, max_attempts = getOption("ggpicrust2.max_retries", 
 #' Enhanced logging system
 #' @noRd
 log_message <- function(msg, level = "INFO") {
-  if (getOption("ggpicrust2.verbose", default = TRUE)) {
+  if (getOption("MicroFun.verbose", default = TRUE)) {
     timestamp <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
     message(sprintf("[%s] %s: %s", timestamp, level, msg))
   }
@@ -429,6 +429,7 @@ annotate_pathways <- function(data, pathway_type, ref_data) {
 
   # Match features with reference data
   matches <- match(features, ref_data$id)
+  # print(matches)
 
   # Create description column
   descriptions <- rep(NA_character_, length(features))
@@ -467,6 +468,7 @@ annotate_pathways <- function(data, pathway_type, ref_data) {
 #' @param daa_results_df A data frame, the output from `pathway_daa` function.
 #' @param ko_to_kegg A logical, decide if convert KO abundance to KEGG pathway abundance. Default is FALSE. Set to TRUE when using the function for the second use case.
 #' @param organism A character string specifying the KEGG organism code (e.g., 'hsa' for human, 'eco' for E. coli). Default is NULL, which retrieves generic KO information not specific to any organism. Only used when ko_to_kegg is TRUE.
+#' @param threshold numeric. Adjusted p-value (or score) cutoff used to retain, default is 0.05
 #'
 #' @return A data frame with annotated pathway information.
 #' If using the function for the first use case, the output data frame will include the following columns:

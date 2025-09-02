@@ -2,37 +2,139 @@
 % Please edit documentation in R/pathway_sdaa.R
 \name{pathway_sdaa}
 \alias{pathway_sdaa}
-\title{Stratified Pathway Differential Abundance Analysis}
+\title{Differential pathway analysis from PICRUSt2 stratified output (by taxon or by function)}
 \usage{
 pathway_sdaa(
   stratified_path,
   physeq,
-  taxon_level = NULL,
+  taxon_level = "Genus",
   group,
   daa_method = "Maaslin2",
-  p.adjust.method = "BH"
+  p.adjust.method = "none",
+  threshold = 0.05,
+  direction = "taxa",
+  pathway = "KO"
 )
 }
 \arguments{
-\item{physeq}{A phyloseq object containing sample metadata and taxonomy.}
+\item{stratified_path}{character. Path to the PICRUSt2 *stratified* table
+(tab-delimited). The file must contain at least the columns:
+`sample`, `taxon`, `function`, and either
+`taxon_function_abun` (for `direction = "taxa"`) or
+`norm_taxon_function_contrib` (for `direction = "function"`).}
 
-\item{taxon_level}{Optional. Taxonomic level to aggregate taxa (e.g., "Genus"). If NULL, no aggregation is done.}
+\item{physeq}{A `phyloseq` object containing `sample_data()` and `tax_table()`
+with taxa names matching the PICRUSt2 `taxon` field.}
 
-\item{group}{Character. The column name in metadata to use for group comparison (e.g., "prediabetes").}
+\item{taxon_level}{character. Taxonomic rank to merge ASVs to (e.g., `"Genus"`).
+If `NULL`, no taxonomic aggregation is performed. Must be a column of
+`tax_table(physeq)`. Default `"Genus"`.}
 
-\item{daa_method}{Character. Differential abundance method. Default is "Maaslin2".}
+\item{group}{character (scalar). Column name in `sample_data(physeq)` defining
+the groups/phenotypes used in the DAA design.}
 
-\item{p.adjust.method}{Character. Multiple testing correction method. Default is "BH".}
+\item{daa_method}{character. Method passed to `pathway_daa()` (e.g., `"Maaslin2"`).
+Default `"Maaslin2"`.}
 
-\item{picrust2_path}{Path to PICRUSt2 stratified KO output file ("pred_metagenome_contrib.tsv").}
+\item{p.adjust.method}{character. Multiple-testing correction method passed to
+`pathway_daa()` (e.g., `"BH"`, `"none"`). Default `"none"`.}
 
-\item{output_dir}{Character. Directory to store MaAsLin2 output. Default is "maaslin2_output".}
+\item{threshold}{numeric. Significance threshold used by the annotation step
+(`result_annotation()` / `MicroFun::pathway_annotation()`). Default `0.05`.}
+
+\item{direction}{character. Workflow direction: `"taxa"` (split by taxon/ASV,
+build function × sample tables per taxon) or `"function"` (split by function
+and aggregate contributions by the chosen taxon level). Default `"taxa"`.}
+
+\item{pathway}{character. Pathway/function namespace:
+`"KO"`, `"EC"`, or `"MetaCyc"`.
+* `"KO"`: strips `"ko:"` prefix and converts KO → KEGG pathway abundance via
+`ko2kegg_abundance()` (sets `ko_to_kegg = TRUE`);
+* `"EC"` / `"MetaCyc"`: uses the `function` rows as-is (no KO→KEGG conversion;
+sets `ko_to_kegg = FALSE`).}
 }
 \value{
-A named list of data frames containing KEGG-annotated significant features for each taxon.
+A named `list`. For `direction = "taxa"`, names are the merged taxon labels at
+`taxon_level`; for `direction = "function"`, names are the function IDs being
+tested. Each element is a `data.frame` of annotated significant features as
+returned by `MicroFun::pathway_annotation()` or `result_annotation()`.
+If no significant results are found, the function throws an error with a
+suggestion to relax thresholds or check inputs.
 }
 \description{
-Performs stratified differential abundance analysis (sDAA) using stratified KO predictions from PICRUSt2.
-For each taxon, this function extracts its KO function profile and applies a differential abundance method (e.g., MaAsLin2).
-Optionally, taxa can be aggregated to a specified taxonomic level before analysis.
+Runs a per-*taxon* or per-*function* differential abundance analysis (DAA) on
+stratified PICRUSt2 output matched to a `phyloseq` object. Optionally aggregates
+ASVs to a specified taxonomic rank, converts KO to KEGG pathway abundance when
+requested, and annotates significant results.
+}
+\details{
+**Pipeline (high level):**
+1. Read stratified table (`data.table::fread`) and verify overlap with
+   `sample_names(physeq)` and `taxa_names(physeq)`.
+2. If `direction = "taxa"`:
+   - Split by `taxon`; reshape to wide (rows = `function`, cols = samples) using
+     `taxon_function_abun`.
+   - Optionally merge ASVs to `taxon_level` using `tax_table(physeq)` and sum.
+   - Keep taxa with ≥2 groups present in `group` and >4 samples total; drop
+     `"unknown"`/`"uncultured"`.
+3. If `direction = "function"`:
+   - Split by `function`; within each, map ASV to `taxon_level`, remove
+     unclassified, and aggregate `norm_taxon_function_contrib` by level × sample.
+   - Keep functions where `group` has ≥2 levels and >4 samples.
+4. If `pathway = "KO"`, strip `"ko:"` and convert KO abundances to KEGG pathway
+   abundance (`ko2kegg_abundance`). For `"EC"`/`"MetaCyc"`, skip conversion.
+5. Build sample metadata subset from `sample_data(physeq)` for the samples present,
+   then run `pathway_daa()` with the chosen `daa_method` and `p.adjust.method`.
+6. Annotate significant results via `MicroFun::pathway_annotation()` (for `"KO"`,
+   pass `ko_to_kegg = TRUE`), or `result_annotation()` when `direction = "function"`.
+
+**Filtering rules:** taxa/functions are skipped if only one group is represented
+in `group`, if total usable samples ≤ 4, or if the taxon label is
+`"unknown"`/`"uncultured"`.
+}
+\section{Expected input columns}{
+
+- `sample` (character): sample ID matching `sample_names(physeq)`.
+- `taxon` (character): ASV/feature ID matching `taxa_names(physeq)`.
+- `function` (character): KO/EC/MetaCyc identifier (e.g., `"ko:K00001"`, `"EC:1.1.1.1"`).
+- `taxon_function_abun` (numeric): stratified abundance (for `direction = "taxa"`).
+- `norm_taxon_function_contrib` (numeric): normalized contributions (for
+  `direction = "function"`).
+}
+
+\examples{
+\dontrun{
+# By taxon, KO → KEGG pathway analysis
+res_ko <- pathway_sdaa(
+  stratified_path = "picrust2_out/pathways_out/path_abun_strat.tsv.gz",
+  physeq          = ps,
+  taxon_level     = "Genus",
+  group           = "condition",
+  daa_method      = "Maaslin2",
+  p.adjust.method = "BH",
+  threshold       = 0.05,
+  direction       = "taxa",
+  pathway         = "KO"
+)
+
+# By taxon, EC without conversion
+res_ec <- pathway_sdaa(
+  stratified_path = "picrust2_out/ec_out/ec_strat.tsv.gz",
+  physeq          = ps,
+  taxon_level     = "Genus",
+  group           = "condition",
+  direction       = "taxa",
+  pathway         = "EC"
+)
+
+# By function: aggregate ASVs to Genus within each function and test
+res_func <- pathway_sdaa(
+  stratified_path = "picrust2_out/pathways_out/path_abun_strat.tsv.gz",
+  physeq          = ps,
+  taxon_level     = "Genus",
+  group           = "condition",
+  direction       = "function",
+  pathway         = "KO"
+)
+}
 }
