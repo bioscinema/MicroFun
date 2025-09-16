@@ -2,36 +2,64 @@
 % Please edit documentation in R/sankey_diagram.R
 \name{sankey_diagram}
 \alias{sankey_diagram}
-\title{Visualize Functional Contributions with a Sankey Diagram}
+\title{Sankey diagram of genus -> pathway-class contributions (PICRUSt2 stratified)}
 \usage{
 sankey_diagram(
   pathway_sdaa_result,
-  node_color = c(Up = "#79e8d0", Down = "#e8d079")
+  taxa_list = NULL,
+  node_color = c(Up = "#ffa551", Down = "#70afdf"),
+  node_neutral = "#999999",
+  label_left_sources = TRUE,
+  margin = list(top = 10, right = 140, bottom = 10, left = 160)
 )
 }
 \arguments{
-\item{pathway_sdaa_result}{A named list of differential abundance results, typically the output from \code{pathway_sdaa()}.}
+\item{pathway_sdaa_result}{A named \code{list} where each name is a genus and each
+element is a \code{data.frame} with at least the columns:
+\itemize{
+  \item \code{pathway_class} Character; pathway superclass label (e.g., KEGG level-1).
+  \item \code{logFC} Numeric; effect sign/size used to color links (>\,0 = Up).
+  \item \code{p_adjust} Numeric; adjusted p-value (used only for filtering in user code).
+}
+Rows with \code{NA} in \code{pathway_class} are dropped.}
 
-\item{node_color}{Named vector of colors to represent "Up" and "Down" regulated links. Default: \code{c(Up = "#79e8d0", Down = "#e8d079")}.}
+\item{taxa_list}{Optional character vector of genus names to include. Matching is
+case-insensitive. If supplied and none match, the function errors.}
+
+\item{node_color}{Named character vector of length 2 giving link/node colors for
+\code{c(Up, Down)} directions. Default:
+\code{c(Up = "#ffa551", Down = "#70afdf")}.}
+
+\item{node_neutral}{Character scalar used for neutral node color ("All"). Default \code{"#999999"}.
+(Links still use Up/Down colors.)}
+
+\item{label_left_sources}{Logical; if \code{TRUE} (default), place genus labels on the
+**left** of left-column nodes and pathway labels on the **right** of right-column nodes.
+Implemented with a small \code{htmlwidgets::onRender()} D3 hook.}
+
+\item{margin}{A named list with \code{top}, \code{right}, \code{bottom}, \code{left}
+margins (pixels) passed to \code{networkD3::sankeyNetwork()}. Increase \code{left}
+when \code{label_left_sources = TRUE} to avoid clipping.}
 }
 \value{
-A Sankey diagram object rendered by \code{networkD3::sankeyNetwork()}.
+An \emph{htmlwidget} Sankey graph (class \code{htmlwidget}) that can be viewed
+  in RStudio Viewer or a web browser, and embedded in R Markdown/Quarto.
 }
 \description{
-This function generates an interactive Sankey diagram to visualize the relationship
-between genera and functional pathway classes, using the results from \code{pathway_sdaa()}.
+Builds an interactive Sankey diagram (via **networkD3**) showing flows from
+genera (left) to pathway superclasses (right), using per-genus-per-pathway
+differential results (e.g., PICRUSt2 stratified output summarized by MaAsLin2).
+Links are colored by effect direction (Up/Down). Node labels for left-side
+genera can be rendered **to the left of the rectangles** for readability.
 }
 \details{
-Each genus is treated as a source node and each pathway class as a target node.
-The direction of regulation is determined by the sign of \code{logFC} in the input result.
-Only the primary (first-level) pathway class is retained if a hierarchy exists.
-
-Internally, the function uses the \code{networkD3::sankeyNetwork()} function to render
-an interactive diagram in the RStudio Viewer or web browser.
+The function constructs a long table of edges (genus -> pathway class), assigns a link
+group \code{"Up"} or \code{"Down"} by the sign of \code{logFC}, builds unique node names,
+and then calls \code{networkD3::sankeyNetwork()}. A post-render D3 callback adjusts text
+anchors so that left-side labels appear to the left of their rectangles while right-side
+labels remain on the right. Nodes are assigned a neutral group \code{"All"} by default,
+so only links are colored by direction; you can customize node coloring later if desired.
 }
-\examples{
-\dontrun{
-result <- pathway_sdaa(...)
-sankey_diagram(result)
-}
+\seealso{
+\code{\link[networkD3]{sankeyNetwork}}, \code{\link[htmlwidgets]{onRender}}
 }

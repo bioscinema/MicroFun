@@ -119,8 +119,11 @@ function_box <- function(stratified_path, pathway_sdaa_result, physeq, taxon_lev
     genus_df <- result_list_merged[[genus]]
     genus_diff <- pathway_sdaa_result[[genus]]
 
+    setDT(genus_df)
+    setDT(genus_diff)
+
     # Prepare long-format data for all functions in the genus
-    genus_df_long <- melt(genus_df, id.vars = "function", variable.name = "sample", value.name = "abundance")
+    genus_df_long <- data.table::melt(genus_df, id.vars = "function", variable.name = "sample", value.name = "abundance")
     genus_df_long$function_clean <- gsub("^ko:", "", genus_df_long$`function`)
     genus_df_long <- merge(genus_df_long, meta, by = "sample")
 
