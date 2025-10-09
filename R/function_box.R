@@ -54,7 +54,7 @@ function_box <- function(stratified_path, pathway_sdaa_result, physeq, taxon_lev
 
   df_split <- split(df, df$taxon)
   result_list <- lapply(df_split, function(dt) {
-    data.table::dcast(dt, `function` ~ sample, value.var = "taxon_rel_function_abun", fill = 0)
+    data.table::dcast(dt, `function` ~ sample, value.var = "norm_taxon_function_contrib", fill = 0)
   })
 
   sample_names <- sample_names(physeq)
@@ -143,9 +143,9 @@ function_box <- function(stratified_path, pathway_sdaa_result, physeq, taxon_lev
     if (nrow(genus_df_long) == 0) next
 
 
-    p <- ggplot(genus_df_long, aes(x = pathway_name, y = abundance_log, fill = group)) +
+    p <- ggplot(genus_df_long, aes(x = pathway_name, y = abundance, fill = group)) +
       geom_boxplot() +
-      labs(title = genus, x = "Function", y = "Log abundance",fill=group) +
+      labs(title = genus, x = "Function", y = "Contribution",fill=group) +
       theme_minimal() +
       theme(axis.text.x = element_text(angle = 45, hjust = 1))
 

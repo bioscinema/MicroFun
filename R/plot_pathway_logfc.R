@@ -78,6 +78,7 @@ plot_pathway_logfc_one <- function(df,
     # keep the strongest effects, but always keep significant ones
     filter(row_number() <= top_n | p_adjust <= padj_cutoff) %>%
     slice_head(n = top_n) %>%
+    filter(!is.na(logFC)) %>%
     mutate(label = fct_reorder(label, logFC))
 
   g1 <- ggplot(df2, aes(x = label, y = logFC, fill = logFC > 0)) +

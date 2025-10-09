@@ -147,7 +147,7 @@ pathway_sdaa <- function(
 
     # Convert each taxon into a wide-format table (KO x samples)
     result_list <- lapply(taxon_list, function(dt) {
-      data.table::dcast(dt, `function` ~ sample, value.var = "taxon_function_abun", fill = 0)
+      data.table::dcast(dt, `function` ~ sample, value.var = "norm_taxon_function_contrib", fill = 0)
     })
     # names(result_list) <- names(taxon_list)
 
@@ -358,23 +358,34 @@ pathway_sdaa <- function(
     df1 <- data.frame(result_list_subset[[name]], check.names = FALSE)
 
     if (direction == "taxa") {
-      if (pathway == "KO"){
+      if (pathway == "KO") {
+        # Remove rows with NA or empty function values
+        df1 <- df1[!is.na(df1$`function`) & df1$`function` != "", ]
+
         # Remove "ko:" prefix from function names
         df1$`function` <- gsub("^ko:", "", df1$`function`)
-        ko_to_kegg = TRUE
+        ko_to_kegg <- TRUE
 
         # Convert from KO-level to KEGG pathway abundance
         ko_abun <- ko2kegg_abundance(data = df1)
+
       } else if (pathway == "EC") {
-        rownames(df1) <- paste0(pathway,df1$`function`)
+        # Remove rows with NA or empty function values
+        df1 <- df1[!is.na(df1$`function`) & df1$`function` != "", ]
+
+        rownames(df1) <- paste0(pathway, df1$`function`)
         ko_abun <- df1[, setdiff(colnames(df1), "function"), drop = FALSE]
-        ko_to_kegg = FALSE
-        # print(rownames(ko_abun))
-      } else if (pathway == MetaCyc) {
+        ko_to_kegg <- FALSE
+
+      } else if (pathway == "MetaCyc") {
+        # Remove rows with NA or empty function values
+        df1 <- df1[!is.na(df1$`function`) & df1$`function` != "", ]
+
         rownames(df1) <- df1$`function`
         ko_abun <- df1[, setdiff(colnames(df1), "function"), drop = FALSE]
-        ko_to_kegg = FALSE
+        ko_to_kegg <- FALSE
       }
+
 
 
       # Prepare metadata
@@ -390,6 +401,9 @@ pathway_sdaa <- function(
         daa_method = daa_method,
         p.adjust = p.adjust.method
       )
+      if ("feature" %in% colnames(result)) {
+        result <- result[!is.na(result$feature) & result$feature != "", ]
+      }
       # result is a data.frame/matrix with rownames like "EC:1.1.1.1", "ec_2.7.1.1", "EC1.2.3.4"
       # result$feature <- sub("(?i)^EC[:_\\-]*", "", result$feature, perl = TRUE)
 
@@ -430,6 +444,9 @@ pathway_sdaa <- function(
         daa_method = daa_method,
         p.adjust = p.adjust.method
       )
+      if ("feature" %in% colnames(result)) {
+        result <- result[!is.na(result$feature) & result$feature != "", ]
+      }
 
       annotated <- tryCatch(
         {
