@@ -8,6 +8,7 @@ pathway_daa(
   abundance,
   metadata,
   group,
+  confounder = NULL,
   daa_method = "ALDEx2",
   select = NULL,
   p.adjust = "BH",
@@ -26,6 +27,8 @@ Must include a 'sample' column with sample identifiers matching the column names
 
 \item{group}{Character string specifying the column name in metadata that contains group information
 for differential abundance analysis.}
+
+\item{confounder}{Optional covariate(s) to adjust for in the differential analysis.}
 
 \item{daa_method}{Character string specifying the method for differential abundance analysis.
 Available choices are:

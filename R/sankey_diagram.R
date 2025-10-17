@@ -47,7 +47,7 @@
 #' @importFrom htmlwidgets JS onRender
 #' @importFrom jsonlite toJSON
 #' @export
-sankey_diagram <- function(pathway_sdaa_result,
+tax2fun_sankey <- function(pathway_sdaa_result,
                            taxa_list = NULL,
                            node_color   = c(Up = "#ffa551", Down = "#70afdf"),
                            node_neutral = "#999999",
@@ -88,7 +88,7 @@ sankey_diagram <- function(pathway_sdaa_result,
   sankey_df$group     <- ifelse(sankey_df$logFC > 0, "Up", "Down")
   sankey_df$source_id <- match(sankey_df$source, nodes$name) - 1
   sankey_df$target_id <- match(sankey_df$target, nodes$name) - 1
-  sankey_df$value     <- 1
+  sankey_df$value     <- exp(sankey_df$logFC)*10
 
   # colors
   domain <- c("All","Up","Down")

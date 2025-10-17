@@ -1,158 +1,231 @@
-#' Plot Functional Abundance Boxplots for Driving Taxa
+#' Function-level boxplots of pathway contributions
 #'
-#' This function generates boxplots of stratified functional pathway abundances
-#' (from PICRUSt2 output) at a specified taxonomic level for each driving taxon,
-#' grouped by a metadata variable.
+#' Generate per-taxon boxplots of functional contributions (e.g., KO/EC/MetaCyc)
+#' from stratified PICRUSt2 outputs, grouped by sample metadata categories.
+#' This function merges ASV-level stratified contributions into a chosen
+#' taxonomy level (e.g., Genus) and produces boxplots for functions that are
+#' significant in differential abundance analysis results from
+#' \code{pathway_sdaa()}.
 #'
-#' @param stratified_path Path to the stratified output file from PICRUSt2 (typically `*_strat.tsv`).
-#' @param pathway_sdaa_result A named list of data.frames containing differential results
-#'   (with `feature` and `pathway_name`) for each taxon.
-#' @param physeq A `phyloseq` object containing the microbial abundance table, taxonomy, and sample metadata.
-#' @param taxon_level A string indicating the taxonomic level to aggregate functions by
-#'   (e.g., `"Genus"`, `"Family"`). Default is `"Genus"`.
-#' @param group A string specifying the sample metadata column used for grouping in boxplots.
+#' @param stratified_path Character scalar. Path to the stratified PICRUSt2 output
+#'   (e.g., \code{pred_metagenome_contrib.tsv}), which must contain at least
+#'   the columns \code{sample}, \code{taxon}, \code{function},
+#'   \code{norm_taxon_function_contrib}.
+#' @param pathway_sdaa_result Named list of results from \code{pathway_sdaa()}.
+#'   Each element should be a data.frame with at least \code{feature} and
+#'   \code{pathway_name} (or \code{feature} only). The list names must correspond
+#'   to taxa labels (e.g., genera).
+#' @param physeq A \code{phyloseq} object containing both taxonomy information
+#'   (via \code{tax_table}) and sample metadata (via \code{sample_data}).
+#' @param taxon_level Character scalar. Taxonomic rank at which to aggregate
+#'   ASV-level contributions (e.g., \code{"Genus"}). Must be a column in
+#'   \code{phyloseq::tax_table(physeq)}.
+#' @param group Character scalar. Column name in \code{sample_data(physeq)}
+#'   indicating the grouping variable (e.g., treatment, case/control).
 #'
-#' @return A named list of `ggplot2` boxplot objects, one for each taxon with matching functional results.
-#'
-#' @details This function:
-#' \itemize{
-#'   \item Parses PICRUSt2 stratified output and maps ASVs to their taxonomic levels.
-#'   \item Aggregates function abundances at the taxon level.
-#'   \item Filters and matches functions found in the user-provided differential result per taxon.
-#'   \item Generates and returns a list of ggplot boxplots of function abundance by group.
-#' }
-#'
-#' @import ggplot2 phyloseq data.table reshape2
-#' @importFrom utils read.table
-#' @importFrom stats aggregate
-#' @export
 #'
 #' @examples
 #' \dontrun{
-#' plot_list <- function_box(
-#'   stratified_path = "ko_metagenome_out/pred_metagenome_unstrat.tsv",
-#'   pathway_sdaa_result = diff_results,
-#'   physeq = my_phyloseq,
-#'   taxon_level = "Genus",
-#'   group = "disease_status"
+#' # Example usage
+#' stratified_path <- "pred_metagenome_contrib.tsv"
+#' plots <- function_box(
+#'   stratified_path     = stratified_path,
+#'   pathway_sdaa_result = sdaa_res,
+#'   physeq              = physeq_obj,
+#'   taxon_level         = "Genus",
+#'   group               = "Group"
 #' )
-#' plot_list$Bacteroides  # View boxplot for Bacteroides genus
+#' # Access the plot for GenusA
+#' plots[["GenusA"]]
 #' }
-function_box <- function(stratified_path, pathway_sdaa_result, physeq, taxon_level = "Genus", group) {
-  # library(ggplot2)
-  # library(phyloseq)
-  # library(data.table)
-  # library(reshape2)
+#'
+#' @seealso \code{\link{pathway_sdaa}}, \pkg{phyloseq}, \pkg{ggplot2}
+#'
+#' @export
+function_box <- function(
+    stratified_path,
+    pathway_sdaa_result,
+    physeq,
+    taxon_level = "Genus",
+    group
+){
+  # --- checks -------------------------------------------------------------------
+  stopifnot(is.character(stratified_path), length(stratified_path) == 1)
+  if (!file.exists(stratified_path)) stop("File not found: ", stratified_path)
+  stopifnot(inherits(physeq, "phyloseq"))
+  if (!taxon_level %in% colnames(phyloseq::tax_table(physeq))) {
+    stop("taxon_level '", taxon_level, "' not found in taxonomy table.")
+  }
+  if (!is.list(pathway_sdaa_result) || !length(pathway_sdaa_result)) {
+    stop("`pathway_sdaa_result` must be a non-empty named list.")
+  }
+  if (is.null(names(pathway_sdaa_result)) || any(names(pathway_sdaa_result) == "")) {
+    stop("`pathway_sdaa_result` must be a *named* list (names = genera).")
+  }
 
-  # Load stratified Picrust2 output
-  df <- fread(stratified_path, sep = "\t")
+  # --- IO: PICRUSt2 stratified table -------------------------------------------
+  df <- data.table::fread(stratified_path, sep = "\t")
+  req_cols <- c("sample","taxon","function","norm_taxon_function_contrib")
+  miss <- setdiff(req_cols, names(df))
+  if (length(miss)) stop("Missing columns in stratified file: ", paste(miss, collapse = ", "))
 
-  # Merge taxonomy to desired level
-  tax_table_df <- as.data.frame(tax_table(physeq))
-  tax_table_df$ASV <- rownames(tax_table_df)
-  tax_table_df <- tax_table_df[, c("ASV", taxon_level)]
+  # --- taxonomy & samples -------------------------------------------------------
+  taxtab <- as.data.frame(phyloseq::tax_table(physeq))
+  taxtab$ASV <- rownames(taxtab)
+  taxtab <- taxtab[, c("ASV", taxon_level), drop = FALSE]
 
+  sample_ids <- phyloseq::sample_names(physeq)
+  if (!length(intersect(df$sample, sample_ids))) {
+    stop("No overlapping samples between PICRUSt2 file and phyloseq object.")
+  }
+
+  meta <- as.data.frame(phyloseq::sample_data(physeq))
+  if (!(group %in% colnames(meta))) {
+    stop("Group column '", group, "' not found in sample_data.")
+  }
+  meta$sample <- rownames(meta)
+  meta[[group]] <- as.factor(meta[[group]])
+
+  # Helper to normalize function IDs (e.g., "ko:K00001" -> "K00001")
+  .clean_fun <- function(x){
+    x <- as.character(x)
+    x <- sub("^ko:", "", x, ignore.case = TRUE)
+    x <- sub("^KO:", "", x, ignore.case = TRUE)
+    x
+  }
+
+  # --- ASV -> sample wide tables (rows = function IDs) --------------------------
   df_split <- split(df, df$taxon)
-  result_list <- lapply(df_split, function(dt) {
-    data.table::dcast(dt, `function` ~ sample, value.var = "norm_taxon_function_contrib", fill = 0)
+
+  per_asv <- lapply(df_split, function(dt){
+    data.table::dcast(
+      data.table::as.data.table(dt),
+      `function` ~ sample,
+      value.var = "norm_taxon_function_contrib",
+      fill = 0
+    )
   })
 
-  sample_names <- sample_names(physeq)
-  result_list_subset <- lapply(result_list, function(dt) {
-    cols_to_keep <- c("function", intersect(names(dt), sample_names))
-    dt[, ..cols_to_keep]
+  # keep only columns present in physeq samples
+  per_asv <- lapply(per_asv, function(dt){
+    cols <- intersect(colnames(dt), c("function", sample_ids))
+    dt[, ..cols]
   })
 
-  result_list_merged <- list()
-  for (i in seq_along(result_list_subset)) {
-    asv   <- names(result_list_subset)[i]
-    level <- tax_table_df[tax_table_df$ASV == asv, taxon_level]
-    if (length(level) == 0 || is.na(level) || level == "" ) {
-      next
-    }
-    if (tolower(level) == "unknown" || tolower(level) == "uncultured") next
+  # --- aggregate ASVs to chosen taxon_level ------------------------------------
+  result_by_level <- list()
+  for (asv in names(per_asv)) {
+    lvl <- taxtab[match(asv, taxtab$ASV), taxon_level]
+    if (length(lvl) == 0 || is.na(lvl) || lvl == "") next
+    if (tolower(lvl) %in% c("unknown","uncultured")) next
 
-    dt <- as.data.table(result_list_subset[[i]])
-    if (!"function" %in% names(dt) || ncol(dt) <= 1L) next
+    dt <- per_asv[[asv]]
+    if (!"function" %in% colnames(dt) || ncol(dt) <= 1L) next
 
-    # long format for this ASV/taxon
-    dt_long <- melt(
-      dt,
-      id.vars       = "function",
+    # melt asv table
+    dt_long <- data.table::melt(
+      data.table::as.data.table(dt),
+      id.vars = "function",
       variable.name = "sample",
-      value.name    = "value"
+      value.name = "value"
     )
 
-    if (level %in% names(result_list_merged)) {
-      # existing table for this level → melt too
-      existing      <- as.data.table(result_list_merged[[level]])
-      existing_long <- melt(
-        existing,
-        id.vars       = "function",
-        variable.name = "sample",
-        value.name    = "value"
-      )
-
-      # combine and sum duplicates (function × sample)
-      combined <- rbindlist(list(existing_long, dt_long), use.names = TRUE, fill = TRUE)
-      combined <- combined[, .(value = sum(value, na.rm = TRUE)), by = .(`function`, sample)]
-
-      # back to wide: rows = function, cols = sample
-      result_list_merged[[level]] <- dcast(
-        combined,
-        `function` ~ sample,
-        value.var = "value",
-        fill = 0
-      )
+    # append into level bucket
+    if (is.null(result_by_level[[lvl]])) {
+      result_by_level[[lvl]] <- dt_long
     } else {
-      result_list_merged[[level]] <- dt  # keep as data.table
+      result_by_level[[lvl]] <- data.table::rbindlist(
+        list(result_by_level[[lvl]], dt_long),
+        use.names = TRUE, fill = TRUE
+      )
     }
   }
 
-  meta <- data.frame(sample_data(physeq))
-  meta$sample <- rownames(meta)
+  # sum duplicates (function x sample) within each level and recast to wide
+  for (lvl in names(result_by_level)) {
+    long <- result_by_level[[lvl]]
+    if (!nrow(long)) { result_by_level[[lvl]] <- NULL; next }
+    agg <- long[, .(value = sum(value, na.rm = TRUE)), by = .(`function`, sample)]
+    wide <- data.table::dcast(agg, `function` ~ sample, value.var = "value", fill = 0)
+    result_by_level[[lvl]] <- wide
+  }
 
-  plot_list <- list()
+  # --- build plots by genus present in pathway_sdaa_result ----------------------
   genera <- names(pathway_sdaa_result)
+  plot_list <- vector("list", length(genera)); names(plot_list) <- genera
 
   for (genus in genera) {
-    genus_df <- result_list_merged[[genus]]
-    genus_diff <- pathway_sdaa_result[[genus]]
+    genus_tbl <- result_by_level[[genus]]
+    if (is.null(genus_tbl) || !"function" %in% colnames(genus_tbl) || ncol(genus_tbl) <= 1L) {
+      next
+    }
 
-    setDT(genus_df)
-    setDT(genus_diff)
+    # long format (function × sample)
+    g_long <- data.table::melt(
+      data.table::as.data.table(genus_tbl),
+      id.vars = "function", variable.name = "sample", value.name = "abundance"
+    )
+    if (!nrow(g_long)) next
 
-    # Prepare long-format data for all functions in the genus
-    genus_df_long <- data.table::melt(genus_df, id.vars = "function", variable.name = "sample", value.name = "abundance")
-    genus_df_long$function_clean <- gsub("^ko:", "", genus_df_long$`function`)
-    genus_df_long <- merge(genus_df_long, meta, by = "sample")
+    # normalize function IDs to match DAA result "feature"
+    g_long[, function_clean := .clean_fun(`function`)]
 
-    # Only plot functions that exist in the differential result
-    # Extract numeric parts
-    genus_df_long$function_num <- gsub("^[A-Za-z]+", "", genus_df_long$function_clean)
-    genus_diff$feature_num <- gsub("^ko", "", genus_diff$feature)
+    # DAA table for this genus
+    daa_df <- pathway_sdaa_result[[genus]]
+    if (is.null(daa_df) || !nrow(daa_df)) next
 
-    # Filter based on numeric part match
-    # Merge pathway_name info into genus_df_long
-    genus_df_long <- merge(genus_df_long, genus_diff[, c("feature_num", "pathway_name")],
-                           by.x = "function_num", by.y = "feature_num", all.x = TRUE)
-    # Remove NA or empty pathway names
-    genus_df_long <- genus_df_long[!is.na(genus_df_long$pathway_name) & genus_df_long$pathway_name != "", ]
-    eps <- 1e-6
-    genus_df_long[, abundance_log := log10(pmax(abundance, 0) + eps)]
-    if (nrow(genus_df_long) == 0) next
+    # prefer pathway_name, fall back to feature
+    if (!"feature" %in% names(daa_df)) next
+    if (!"pathway_name" %in% names(daa_df)) daa_df$pathway_name <- daa_df$feature
 
+    daa_df$feature_clean <- .clean_fun(daa_df$feature)
+    daa_keep <- daa_df[, c("feature_clean","pathway_name"), drop = FALSE]
 
-    p <- ggplot(genus_df_long, aes(x = pathway_name, y = abundance, fill = group)) +
-      geom_boxplot() +
-      labs(title = genus, x = "Function", y = "Contribution",fill=group) +
-      theme_minimal() +
-      theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    # join to keep only functions present in DAA result and carry names
+    g_long <- merge(
+      g_long,
+      daa_keep,
+      by.x = "function_clean",
+      by.y = "feature_clean",
+      all.x = FALSE, all.y = FALSE
+    )
+    if (!nrow(g_long)) next
+
+    # attach metadata and filter to samples with group
+    g_long <- merge(g_long, meta, by = "sample", all.x = TRUE)
+    g_long <- g_long[!is.na(g_long[[group]]), , drop = FALSE]
+    if (!nrow(g_long)) next
+
+    # optional: log-scale helper if you need it later (kept numeric safe)
+    # eps <- 1e-6
+    # g_long$abundance_log <- log10(g_long$abundance + eps)
+
+    # plot
+    p <- ggplot2::ggplot(
+      g_long,
+      ggplot2::aes(x = stats::reorder(pathway_name, abundance, FUN = median),  # order by median
+                   y = abundance, fill = .data[[group]])
+    ) +
+      ggplot2::geom_boxplot(outlier.shape = 16, outlier.size = 0.8) +
+      ggplot2::labs(
+        title = genus,
+        x = "Function",
+        y = "Contribution",
+        fill = group
+      ) +
+      ggplot2::coord_cartesian(clip = "off") +
+      ggplot2::theme_minimal(base_size = 11) +
+      ggplot2::theme(
+        plot.title.position = "plot",
+        axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)
+      )
 
     plot_list[[genus]] <- p
   }
 
-  return(plot_list)
+  # drop NULLs (genera with no plot)
+  plot_list[!vapply(plot_list, is.null, logical(1))]
 }
+
 
 
