@@ -1,9 +1,10 @@
 Package: MicroFun
 Type: Package
-Title: an R package to do statistical inference and visualization for PICRUST2 output
+Title: Make 'PICRUSt2' Output Analysis and Visualization Easier
 Version: 1.7.4
 Authors@R: c(
-    person("Ruitao", "Liu", email = "rxl761@case.edu", role = c("aut", "cre")))
+    person("Ruitao", "Liu", email = "rxl761@case.edu", role = c("aut", "cre")),
+    person("Liangliang", "Zhang", email = "lxz716@case.edu ", role = "aut"))
 Description: Extends ‘ggpicrust2’ to support stratified ‘PICRUSt2’ outputs, enabling taxon-resolved aggregation, differential analysis by taxon or by function, KEGG/EC/MetaCyc annotation, and publication-ready visualizations integrated with ‘phyloseq’.
 BugReports: https://github.com/bioscinema/MicroFun/issues
 URL: 
@@ -48,6 +49,7 @@ Imports:
     scales,
     htmlwidgets,
     jsonlite,
+    data.table,
     progress
 Depends: 
     R (>= 2.10)
@@ -55,7 +57,9 @@ Suggests:
     Biobase,
     KEGGREST,
     ComplexHeatmap,
+    ggplotify,
     BiocGenerics,
+    magrittr,
     utils,
     knitr,
     rmarkdown,

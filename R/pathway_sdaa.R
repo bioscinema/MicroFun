@@ -1,98 +1,119 @@
-#' Stratified pathway-level DAA from PICRUSt2 outputs
-#'
-#' Build per-\code{taxon} or per-\code{function} abundance tables from a
-#' stratified PICRUSt2 file and run differential abundance analysis (DAA)
-#' at the pathway/function level, optionally adjusting for confounders.
+#' Differential pathway analysis from PICRUSt2 stratified output (by taxon or by function)
 #'
 #' @description
-#' Given a PICRUSt2 stratified output (e.g., \code{pred_metagenome_contrib.tsv})
-#' and a \code{phyloseq} object, this function:
-#' \enumerate{
-#'   \item checks sample and taxa overlap,
-#'   \item aggregates ASV-level contributions to a chosen taxonomy level
-#'         (e.g., \code{"Genus"}) \emph{or} groups by function,
-#'   \item constructs wide matrices (rows = KO/EC/MetaCyc IDs or taxa, cols = samples),
-#'   \item filters tables with insufficient group representation,
-#'   \item runs DAA via \code{pathway_daa()} (supports edgeR/DESeq2/limma-voom/Maaslin2/etc.),
-#'   \item annotates significant results via \code{MicroFun::pathway_annotation()} or
-#'         \code{result_annotation()}.
-#' }
+#' Runs a per-*taxon* or per-*function* differential abundance analysis (DAA) on
+#' stratified PICRUSt2 output matched to a `phyloseq` object. Optionally aggregates
+#' ASVs to a specified taxonomic rank, converts KO to KEGG pathway abundance when
+#' requested, and annotates significant results.
 #'
-#' @param stratified_path \strong{character}. Path to PICRUSt2 stratified output
-#'   (tab-delimited) containing at least the columns:
-#'   \code{sample}, \code{taxon}, \code{function},
-#'   \code{norm_taxon_function_contrib}.
-#' @param physeq \strong{phyloseq} object. Must contain both \code{tax_table}
-#'   (with an \code{ASV} rownames key) and \code{sample_data}.
-#' @param taxon_level \strong{character}. Taxonomic rank to aggregate to when
-#'   \code{direction = "taxa"} (e.g., \code{"Genus"}, \code{"Family"}). Must be a
-#'   column in \code{phyloseq::tax_table(physeq)}.
-#' @param group \strong{character}. Column name in \code{sample_data} indicating
-#'   the primary grouping variable for DAA (will be coerced to a factor).
-#' @param daa_method \strong{character}. DAA backend name passed to
-#'   \code{pathway_daa()} (e.g., \code{"Maaslin2"}, \code{"edgeR"},
-#'   \code{"DESeq2"}, \code{"limma voom"}, \code{"metagenomeSeq"}, \code{"Lefser"}).
-#' @param p.adjust.method \strong{character}. Multiple-testing correction method
-#'   forwarded to \code{pathway_daa()} (e.g., \code{"none"}, \code{"BH"}).
-#' @param threshold \strong{numeric}. Significance cutoff used during annotation
-#'   (typically FDR/q-value threshold).
-#' @param direction \strong{character}. One of \code{"taxa"} or \code{"function"}.
-#'   If \code{"taxa"}, the function aggregates ASV contributions to \code{taxon_level}
-#'   and analyzes per-taxon tables. If \code{"function"}, it groups by function
-#'   (KO/EC/MetaCyc) and analyzes per-function tables.
-#' @param pathway \strong{character}. Functional namespace of the \code{function}
-#'   column: one of \code{"KO"}, \code{"EC"}, or \code{"MetaCyc"}. Controls
-#'   downstream annotation and (for KO) \code{ko_to_kegg} mapping.
-#' @param confounders Optional covariate(s) to adjust for in DAA backends that
-#'   support them (e.g., edgeR/limma/Maaslin2). Either a vector (single covariate)
-#'   or a \code{data.frame}/tibble with one column per covariate. If a character
-#'   vector, the named columns are pulled from \code{sample_data(physeq)}. Must
-#'   align with samples in the abundance matrices. Characters are converted to
-#'   factors by the modeling backend.
-#' @param reference \strong{character} or \code{NULL}. Optional reference level
-#'   for \code{group}; if supplied and present, \code{group} is releveled accordingly.
-#' @param min_samples \strong{integer}. Require strictly more than this number of
-#'   samples in the per-table subset (after filtering to samples with non-missing
-#'   group) to run DAA. Default: \code{5}.
-#' @param verbose \strong{logical}. If \code{TRUE}, print progress messages.
+#' @param stratified_path character. Path to the PICRUSt2 *stratified* table
+#'   (tab-delimited). The file must contain at least the columns:
+#'   `sample`, `taxon`, `function`, and either
+#'   `taxon_function_abun` (for `direction = "taxa"`) or
+#'   `norm_taxon_function_contrib` (for `direction = "function"`).
+#' @param physeq A `phyloseq` object containing `sample_data()` and `tax_table()`
+#'   with taxa names matching the PICRUSt2 `taxon` field.
+#' @param taxon_level character. Taxonomic rank to merge ASVs to (e.g., `"Genus"`).
+#'   If `NULL`, no taxonomic aggregation is performed. Must be a column of
+#'   `tax_table(physeq)`. Default `"Genus"`.
+#' @param group character (scalar). Column name in `sample_data(physeq)` defining
+#'   the groups/phenotypes used in the DAA design.
+#' @param daa_method character. Method passed to `pathway_daa()` (e.g., `"Maaslin2"`).
+#'   Default `"Maaslin2"`.
+#' @param p.adjust.method character. Multiple-testing correction method passed to
+#'   `pathway_daa()` (e.g., `"BH"`, `"none"`). Default `"none"`.
+#' @param threshold numeric. Significance threshold used by the annotation step
+#'   (`result_annotation()` / `MicroFun::pathway_annotation()`). Default `0.05`.
+#' @param direction character. Workflow direction: `"taxa"` (split by taxon/ASV,
+#'   build function × sample tables per taxon) or `"function"` (split by function
+#'   and aggregate contributions by the chosen taxon level). Default `"taxa"`.
+#' @param pathway character. Pathway/function namespace:
+#'   `"KO"`, `"EC"`, or `"MetaCyc"`.
+#'   * `"KO"`: strips `"ko:"` prefix and converts KO → KEGG pathway abundance via
+#'   `ko2kegg_abundance()` (sets `ko_to_kegg = TRUE`);
+#'   * `"EC"` / `"MetaCyc"`: uses the `function` rows as-is (no KO→KEGG conversion;
+#'   sets `ko_to_kegg = FALSE`).
+#'
+#' @details
+#' **Pipeline (high level):**
+#' 1. Read stratified table (`data.table::fread`) and verify overlap with
+#'    `sample_names(physeq)` and `taxa_names(physeq)`.
+#' 2. If `direction = "taxa"`:
+#'    - Split by `taxon`; reshape to wide (rows = `function`, cols = samples) using
+#'      `taxon_function_abun`.
+#'    - Optionally merge ASVs to `taxon_level` using `tax_table(physeq)` and sum.
+#'    - Keep taxa with ≥2 groups present in `group` and >4 samples total; drop
+#'      `"unknown"`/`"uncultured"`.
+#' 3. If `direction = "function"`:
+#'    - Split by `function`; within each, map ASV to `taxon_level`, remove
+#'      unclassified, and aggregate `norm_taxon_function_contrib` by level × sample.
+#'    - Keep functions where `group` has ≥2 levels and >4 samples.
+#' 4. If `pathway = "KO"`, strip `"ko:"` and convert KO abundances to KEGG pathway
+#'    abundance (`ko2kegg_abundance`). For `"EC"`/`"MetaCyc"`, skip conversion.
+#' 5. Build sample metadata subset from `sample_data(physeq)` for the samples present,
+#'    then run `pathway_daa()` with the chosen `daa_method` and `p.adjust.method`.
+#' 6. Annotate significant results via `MicroFun::pathway_annotation()` (for `"KO"`,
+#'    pass `ko_to_kegg = TRUE`), or `result_annotation()` when `direction = "function"`.
+#'
+#' **Filtering rules:** taxa/functions are skipped if only one group is represented
+#' in `group`, if total usable samples ≤ 4, or if the taxon label is
+#' `"unknown"`/`"uncultured"`.
+#'
+#' @return
+#' A named `list`. For `direction = "taxa"`, names are the merged taxon labels at
+#' `taxon_level`; for `direction = "function"`, names are the function IDs being
+#' tested. Each element is a `data.frame` of annotated significant features as
+#' returned by `MicroFun::pathway_annotation()` or `result_annotation()`.
+#' If no significant results are found, the function throws an error with a
+#' suggestion to relax thresholds or check inputs.
+#'
+#' @section Expected input columns:
+#' - `sample` (character): sample ID matching `sample_names(physeq)`.
+#' - `taxon` (character): ASV/feature ID matching `taxa_names(physeq)`.
+#' - `function` (character): KO/EC/MetaCyc identifier (e.g., `"ko:K00001"`, `"EC:1.1.1.1"`).
+#' - `taxon_function_abun` (numeric): stratified abundance (for `direction = "taxa"`).
+#' - `norm_taxon_function_contrib` (numeric): normalized contributions (for
+#'   `direction = "function"`).
+#'
+#'
+#' @import data.table reshape2 phyloseq
+#' @export
 #'
 #' @examples
 #' \dontrun{
-#' # Example inputs (toy):
-#' stratified_path <- "pred_metagenome_contrib.tsv"
-#' group <- "Group"
-#'
-#' # 1) Per-taxon KO analysis at Genus level using Maaslin2
-#' res_taxa <- pathway_sdaa(
-#'   stratified_path = stratified_path,
-#'   physeq          = physeq_obj,
+#' # By taxon, KO → KEGG pathway analysis
+#' res_ko <- pathway_sdaa(
+#'   stratified_path = "picrust2_out/pathways_out/path_abun_strat.tsv.gz",
+#'   physeq          = ps,
 #'   taxon_level     = "Genus",
-#'   group           = group,
+#'   group           = "condition",
 #'   daa_method      = "Maaslin2",
 #'   p.adjust.method = "BH",
 #'   threshold       = 0.05,
 #'   direction       = "taxa",
-#'   pathway         = "KO",
-#'   confounders     = c("age","sex"),
-#'   reference       = "Control"
+#'   pathway         = "KO"
 #' )
 #'
-#' # 2) Per-function MetaCyc analysis without confounders
-#' res_fun <- pathway_sdaa(
-#'   stratified_path = stratified_path,
-#'   physeq          = physeq_obj,
+#' # By taxon, EC without conversion
+#' res_ec <- pathway_sdaa(
+#'   stratified_path = "picrust2_out/ec_out/ec_strat.tsv.gz",
+#'   physeq          = ps,
 #'   taxon_level     = "Genus",
-#'   group           = group,
-#'   daa_method      = "edgeR",
-#'   p.adjust.method = "BH",
-#'   threshold       = 0.1,
+#'   group           = "condition",
+#'   direction       = "taxa",
+#'   pathway         = "EC"
+#' )
+#'
+#' # By function: aggregate ASVs to Genus within each function and test
+#' res_func <- pathway_sdaa(
+#'   stratified_path = "picrust2_out/pathways_out/path_abun_strat.tsv.gz",
+#'   physeq          = ps,
+#'   taxon_level     = "Genus",
+#'   group           = "condition",
 #'   direction       = "function",
-#'   pathway         = "MetaCyc"
+#'   pathway         = "KO"
 #' )
 #' }
-#'
-#' @export
-#'
 pathway_sdaa <- function(
     stratified_path,
     physeq,
@@ -100,264 +121,362 @@ pathway_sdaa <- function(
     group,
     daa_method = "Maaslin2",
     p.adjust.method = "none",
-    threshold = 0.05,
-    direction = "taxa",          # "taxa" or "function"
-    pathway   = "KO",            # "KO", "EC", or "MetaCyc"
-    confounders = NULL,          # NULL, character vector of metadata columns, vector, or data.frame
-    reference   = NULL,          # optional reference level for `group`
-    min_samples = 5,             # require > min_samples per test table
-    verbose     = TRUE
+    threshold=0.05,
+    direction = "taxa",
+    pathway="KO"
 ) {
-  stopifnot(direction %in% c("taxa","function"))
-  stopifnot(pathway %in% c("KO","EC","MetaCyc"))
-
-  # --- 1) Load & validate inputs ------------------------------------------------
+  # Load stratified Picrust2 output
   df <- data.table::fread(stratified_path, sep = "\t")
-  req_cols <- c("sample","taxon","function","norm_taxon_function_contrib")
-  miss <- setdiff(req_cols, names(df))
-  if (length(miss)) stop("Missing required columns in PICRUSt2 file: ", paste(miss, collapse = ", "))
 
-  # phyloseq pieces
   sample_names <- phyloseq::sample_names(physeq)
-  if (!length(intersect(as.character(df$sample), sample_names))) {
-    stop("No overlapping samples between PICRUSt2 output and phyloseq object.")
+  if (length(intersect(as.character(df$sample), phyloseq::sample_names(physeq))) == 0L)
+  {
+    stop("No overlapping samples between PICRUST2 output and phyloseq object.")
   }
 
-  taxtab <- as.data.frame(phyloseq::tax_table(physeq))
-  taxtab$ASV <- rownames(taxtab)
-
-  # sample_data as data.frame with rownames as sample ids
-  mysam <- as.data.frame(phyloseq::sample_data(physeq))
-  if (!(group %in% colnames(mysam))) {
-    stop("Group column '", group, "' is not present in sample_data.")
+  if (!("taxon" %in% names(df)) || !any(as.character(df$taxon) %in% phyloseq::taxa_names(physeq)))
+  {
+    stop("No overlapping taxa between PICRUSt2 'taxon' and phyloseq::taxa_names(physeq).")
   }
-
-  # enforce factor for group, optionally relevel by reference
-  mysam[[group]] <- as.factor(mysam[[group]])
-  if (!is.null(reference) && reference %in% levels(mysam[[group]])) {
-    mysam[[group]] <- stats::relevel(mysam[[group]], ref = reference)
-  }
-
-  # prepare confounders (if character, pull from mysam)
-  conf_df <- NULL
-  if (!is.null(confounders)) {
-    if (is.character(confounders)) {
-      bad <- setdiff(confounders, colnames(mysam))
-      if (length(bad)) stop("Confounder columns not found in sample_data: ", paste(bad, collapse = ", "))
-      conf_df <- mysam[, confounders, drop = FALSE]
-    } else if (is.vector(confounders)) {
-      conf_df <- data.frame(confounder = confounders)
-    } else if (is.data.frame(confounders)) {
-      conf_df <- confounders
-    } else {
-      stop("'confounders' must be NULL, character vector, vector, or data.frame.")
-    }
-  }
-
-  if (!(taxon_level %in% colnames(taxtab))) {
-    stop("The specified 'taxon_level' (", taxon_level, ") is not found in the taxonomy table.")
-  }
-
-  # --- 2) Build KO/EC/MetaCyc tables per taxon or per function ------------------
-  if (verbose) message("Preparing per-", direction, " tables...")
-
-  make_wide <- function(dt, value_col = "norm_taxon_function_contrib") {
-    # dt: must have a 'row_id' column for rows and 'sample' for columns
-    data.table::dcast(dt, row_id ~ sample, value.var = value_col, fill = 0)
-  }
-
-  keep_valid_samples <- function(tab, sample_names) {
-    sample_cols <- intersect(colnames(tab), sample_names)
-    tab[, c(colnames(tab)[1], sample_cols), drop = FALSE]
-  }
-
-  # filter taxa (unknown/uncultured) helper
-  is_bad_lvl <- function(x) {
-    x <- tolower(as.character(x))
-    is.na(x) | x == "" | x %in% c("unknown","uncultured")
-  }
-
-  result_list_subset <- list()
+  mysam <- data.frame(physeq@sam_data)
 
   if (direction == "taxa") {
-    # Split by ASV/taxon
+
+    # Split by taxon
     taxon_list <- split(df, df$taxon)
 
-    # ASV -> taxon_level mapping
-    map_level <- taxtab[, c("ASV", taxon_level)]
-    # Per ASV build wide: rows=function (KO/EC/MetaCyc id), cols=samples
-    per_asv <- lapply(taxon_list, function(dt) {
-      tmp <- data.table::copy(dt)
-      tmp[, row_id := `function`]
-      make_wide(tmp)
+    # Convert each taxon into a wide-format table (KO x samples)
+    result_list <- lapply(taxon_list, function(dt) {
+      data.table::dcast(dt, `function` ~ sample, value.var = "norm_taxon_function_contrib", fill = 0)
+    })
+    # names(result_list) <- names(taxon_list)
+
+    # Filter to samples that exist in physeq
+
+    result_list_subset <- lapply(result_list, function(dt) {
+      # print(names(dt))
+      cols_to_keep <- c("function", intersect(names(dt), sample_names))
+      dt_subset <- dt[, ..cols_to_keep]  # data.table column subset
+      return(dt_subset)
     })
 
-    # Keep only sample columns known to physeq
-    per_asv <- lapply(per_asv, keep_valid_samples, sample_names = sample_names)
+    result_list_subset <- result_list_subset[
+      sapply(result_list_subset, ncol) > 1
+    ]
 
-    # Merge ASVs to the specified taxon_level (sum by level)
-    # Build named list for levels
-    if (verbose) message("Aggregating ASV tables to level: ", taxon_level)
-    result_list_merged <- list()
+    # Merge taxonomy to desired level if specified
+    if (!is.null(taxon_level)) {
+      tax_table_df <- as.data.frame(phyloseq::tax_table(physeq))
+      tax_table_df$ASV <- rownames(tax_table_df)
+      tax_table_df <- tax_table_df[, c("ASV", taxon_level)]
 
-    for (asv in names(per_asv)) {
-      lvl <- map_level[match(asv, map_level$ASV), taxon_level]
-      if (length(lvl) == 0 || is_bad_lvl(lvl)) next
+      result_list_merged <- list()
 
-      tab <- per_asv[[asv]]
-      if (!ncol(tab) > 1) next
-      # melt + sum + cast ensures aligned union across ASVs within same level
-      long <- reshape2::melt(tab, id.vars = colnames(tab)[1], variable.name = "sample", value.name = "value")
-      # combine into level bucket
-      if (is.null(result_list_merged[[lvl]])) {
-        result_list_merged[[lvl]] <- long
-      } else {
-        result_list_merged[[lvl]] <- rbind(result_list_merged[[lvl]], long)
+      for (i in seq_along(result_list_subset)) {
+        asv <- names(result_list_subset)[i]
+        level <- tax_table_df[tax_table_df$ASV == asv, taxon_level]
+        if (length(level) == 0 || is.na(level) || level == "" ) {
+          next
+        }
+        if (tolower(level) == "unknown" || tolower(level) == "uncultured") next
+        # level <- ifelse(is.na(level) | length(level) == 0, asv, level)
+        # print(level)
+        dt <- result_list_subset[[i]]
+
+        if (!"function" %in% colnames(dt)) next
+
+        dt_long <- as.data.frame(reshape2::melt(dt, id.vars = "function"))
+        colnames(dt_long) <- c("function", "sample", "value")
+
+        if (level %in% names(result_list_merged)) {
+          existing <- result_list_merged[[level]]
+          if (!"function" %in% colnames(existing)) next
+
+          existing_long <- as.data.frame(reshape2::melt(existing, id.vars = "function"))
+          colnames(existing_long) <- c("function", "sample", "value")
+
+          combined_long <- rbind(existing_long, dt_long)
+          combined_long <- aggregate(value ~ `function` + sample, data = combined_long, sum)
+
+          merged_dt <- reshape2::dcast(combined_long, `function` ~ sample, value.var = "value", fill = 0)
+          result_list_merged[[level]] <- merged_dt
+        } else {
+          result_list_merged[[level]] <- dt
+        }
       }
+
+      result_list_merged <- lapply(result_list_merged, function(tbl) {
+        tbl[is.na(tbl)] <- 0
+        return(tbl)
+      })
+
+      # result_list_subset <- result_list_merged
+      # Filter to retain only taxa with at least two groups represented
+
+      result_list_subset <- list()
+
+      for (genus in names(result_list_merged)) {
+        tbl        <- result_list_merged[[genus]]
+        # get your sample columns, excluding the first "function" column
+        sample_ids <- setdiff(colnames(tbl), "function")
+        # drop any samples with missing metadata
+        sample_ids <- intersect(sample_ids, rownames(mysam))
+
+        # look up their group labels
+        sample_groups <- mysam[sample_ids, group]
+        # drop NAs
+        valid        <- !is.na(sample_groups)
+        sample_ids   <- sample_ids[valid]
+        sample_groups<- sample_groups[valid]
+
+        # check #1: need at least two distinct groups
+        if (length(unique(sample_groups)) < 2) {
+          message("Skipping ", genus, "-only one group present")
+          next
+        }
+
+        # check #2: need more than 4 total samples
+        if (length(sample_ids) <= 4) {
+          message("Skipping ", genus,
+                  " -only ", length(sample_ids), " samples (need >4)")
+          next
+        }
+
+        # if we reach here, both checks passed
+        result_list_subset[[genus]] <- tbl
+      }
+
+      # result_list_subset <- lapply(result_list_subset, function(tbl) {
+      #   # keep the "function" column aside
+      #   fun <- tbl[, 1, drop = FALSE]
+      #   mat <- as.matrix(tbl[, -1, drop = FALSE])
+      #
+      #   # compute column sums
+      #   cs  <- colSums(mat, na.rm = TRUE)
+      #   cs[cs == 0] <- NA  # avoid divide-by-zero
+      #
+      #   # divide each column by its sum
+      #   mat_rel <- sweep(mat, 2, cs, `/`)
+      #   mat_rel[is.na(mat_rel)] <- 0  # turn NA back to 0
+      #
+      #   # reassemble
+      #   out <- data.frame(fun, mat_rel, check.names = FALSE, row.names = NULL)
+      #   names(out)[1] <- "function"
+      #   return(out)
+      # })
+
+    }
+  } else if (direction == "function") {
+
+    # Group by function
+    function_list <- split(df, df$'function')
+    result_list_subset <- list()
+
+    # Extract taxonomy table
+    tax_table_df <- as.data.frame(phyloseq::tax_table(physeq))
+    tax_table_df$ASV <- rownames(tax_table_df)
+
+    # Check taxon level exists
+    if (!(taxon_level %in% colnames(tax_table_df))) {
+      stop("The specified 'taxon_level' is not found in the taxonomy table.")
     }
 
-    # sum within level and recast to wide
-    for (lvl in names(result_list_merged)) {
-      agg <- stats::aggregate(value ~ row_id + sample, data = result_list_merged[[lvl]], sum)
-      wide <- reshape2::dcast(agg, row_id ~ sample, value.var = "value", fill = 0)
-      result_list_merged[[lvl]] <- wide
-    }
+    for (func_name in names(function_list)) {
+      dt <- function_list[[func_name]]
 
-    # Filter by metadata availability and sample counts; store
-    for (lvl in names(result_list_merged)) {
-      tbl <- result_list_merged[[lvl]]
-      # intersect with mysam samples (drop those missing group)
-      sample_ids <- setdiff(colnames(tbl), "row_id")
-      sample_ids <- intersect(sample_ids, rownames(mysam))
-      g <- mysam[sample_ids, group]
-      ok <- !is.na(g)
-      sample_ids <- sample_ids[ok]
-      g <- g[ok]
-
-      if (length(unique(g)) < 2) {
-        if (verbose) message("Skipping ", lvl, " (only one group present).")
-        next
-      }
-      if (length(sample_ids) <= min_samples) {
-        if (verbose) message("Skipping ", lvl, " (", length(sample_ids), " samples; need >", min_samples, ").")
-        next
-      }
-      result_list_subset[[lvl]] <- tbl[, c("row_id", sample_ids), drop = FALSE]
-    }
-
-  } else { # direction == "function"
-    # Split by function (KO/EC/MetaCyc)
-    fun_list <- split(df, df$`function`)
-    for (fname in names(fun_list)) {
-      dt <- fun_list[[fname]]
-      # remove unclassified ASV
+      # Remove unclassified entries
       dt <- dt[dt$taxon != "unclassified", ]
-      # map ASV -> level
-      dt$level <- taxtab[match(dt$taxon, taxtab$ASV), taxon_level]
-      dt <- dt[!is_bad_lvl(dt$level), ]
 
-      if (!nrow(dt)) next
-      # aggregate by level x sample
+      # Map ASV/taxon to target level
+      dt$level <- tax_table_df[match(dt$taxon, tax_table_df$ASV), taxon_level]
+
+      # Filter low-quality entries
+      dt <- dt[!is.na(dt$level) & dt$level != "" &
+                 !(tolower(dt$level) %in% c("unknown", "uncultured")), ]
+
+      # Aggregate by taxon_level and sample
       dt_agg <- dt[, .(norm_taxon_function_contrib = sum(norm_taxon_function_contrib, na.rm = TRUE)),
-                   by = .(row_id = level, sample)]
-      wide <- data.table::dcast(dt_agg, row_id ~ sample, value.var = "norm_taxon_function_contrib", fill = 0)
+                   by = .(level, sample)]
 
-      # keep only samples with metadata
-      sample_ids <- intersect(colnames(wide), sample_names)
-      present <- intersect(sample_ids, rownames(mysam))
-      g <- mysam[present, group]
-      ok <- !is.na(g)
-      present <- present[ok]; g <- g[ok]
+      # Convert to wide format: rows = genus, cols = samples
+      dt_wide <- data.table::dcast(dt_agg, level ~ sample,
+                                   value.var = "norm_taxon_function_contrib", fill = 0)
 
-      if (length(unique(g)) < 2) next
-      if (length(present) <= min_samples) next
+      # Keep only sample columns in both dt_wide and metadata
+      sample_ids <- intersect(colnames(dt_wide), sample_names)
+      dt_wide <- dt_wide[, c("level", sample_ids), with = FALSE]
 
-      result_list_subset[[fname]] <- wide[, c("row_id", present), drop = FALSE]
+      # Filter groups
+      present_samples <- intersect(sample_ids, rownames(mysam))
+      sample_groups <- mysam[present_samples, group]
+      valid <- !is.na(sample_groups)
+      sample_groups <- sample_groups[valid]
+      sample_ids <- present_samples[valid]
+
+      if (length(unique(sample_groups)) < 2) next
+      if (length(sample_ids) <= 4) next
+
+      # Subset again to filtered samples
+      dt_wide <- dt_wide[, c("level", sample_ids), with = FALSE]
+
+      # Normalize by sample (TSS)
+      # taxon <- dt_wide[, 1, drop = FALSE]
+      # mat <- as.matrix(dt_wide[, -1, with = FALSE])
+      # cs <- colSums(mat, na.rm = TRUE)
+      # cs[cs == 0] <- NA
+      # mat_rel <- sweep(mat, 2, cs, `/`)
+      # mat_rel[is.na(mat_rel)] <- 0
+
+      result_tbl <- data.frame(dt_wide)
+      names(result_tbl)[1] <- taxon_level
+
+      result_list_subset[[func_name]] <- result_tbl
     }
   }
 
-  if (!length(result_list_subset)) {
-    stop("No eligible ", direction, " tables after filtering by groups and sample counts.")
-  }
 
-  # --- 3) DAA per table + annotation -------------------------------------------
-  if (verbose) message("Running DAA on ", length(result_list_subset), " ", direction, " tables...")
 
+
+  # Initialize result list
   all_daa_results <- list()
 
-  for (nm in names(result_list_subset)) {
-    if (verbose) message("Processing ", direction, ": ", nm)
+  # Iterate through taxon-level KO tables with a progress bar
+  total <- length(result_list_subset)
+  for (i in seq_along(result_list_subset)) {
+    name <- names(result_list_subset)[i]
+    cat(sprintf("\n[%d/%d] Processing %s: %s\n", i, total,
+                ifelse(direction == "taxa", "taxon", "function"), name))
 
-    tbl <- result_list_subset[[nm]]
-    # Prepare abundance & metadata
-    rownames(tbl) <- tbl$row_id
-    tbl <- tbl[, -1, drop = FALSE]
-
-    mysam_subset <- mysam[rownames(mysam) %in% colnames(tbl), , drop = FALSE]
-    mysam_subset$sample <- rownames(mysam_subset)
-    mysam_subset[[group]] <- droplevels(as.factor(mysam_subset[[group]]))
-
-    # DAA
-    # Note: pathway_daa should internally route to edgeR/DESeq2/etc.; we pass confounders & reference when supported
-    result <- pathway_daa(
-      abundance = tbl,
-      metadata  = mysam_subset,
-      group     = group,
-      daa_method= daa_method,
-      p.adjust  = p.adjust.method,
-      confounder= conf_df,
-      reference = reference
-    )
-
-    if (!is.null(result) && "feature" %in% colnames(result)) {
-      result <- result[!is.na(result$feature) & result$feature != "", , drop = FALSE]
+    cat("Running differential analysis: [", sep = "")
+    for (j in 1:30) {
+      cat("=")
+      flush.console()
+      Sys.sleep(0.01)  # simulate progress bar animation
     }
+    cat("]\n")
 
-    # annotation
-    annotated <- NULL
+    df1 <- data.frame(result_list_subset[[name]], check.names = FALSE)
+
     if (direction == "taxa") {
-      ko_to_kegg <- FALSE
       if (pathway == "KO") {
-        # strip "ko:" prefix if present before ko2kegg_abundance inside DAA step
-        # (here only for annotation mapping flags)
+        # Remove rows with NA or empty function values
+        df1 <- df1[!is.na(df1$`function`) & df1$`function` != "", ]
+
+        # Remove "ko:" prefix from function names
+        df1$`function` <- gsub("^ko:", "", df1$`function`)
         ko_to_kegg <- TRUE
+
+        # Convert from KO-level to KEGG pathway abundance
+        ko_abun <- ko2kegg_abundance(data = df1)
+
+      } else if (pathway == "EC") {
+        # Remove rows with NA or empty function values
+        df1 <- df1[!is.na(df1$`function`) & df1$`function` != "", ]
+
+        rownames(df1) <- paste0(pathway, df1$`function`)
+        ko_abun <- df1[, setdiff(colnames(df1), "function"), drop = FALSE]
+        ko_to_kegg <- FALSE
+
+      } else if (pathway == "MetaCyc") {
+        # Remove rows with NA or empty function values
+        df1 <- df1[!is.na(df1$`function`) & df1$`function` != "", ]
+
+        rownames(df1) <- df1$`function`
+        ko_abun <- df1[, setdiff(colnames(df1), "function"), drop = FALSE]
+        ko_to_kegg <- FALSE
       }
+
+
+
+      # Prepare metadata
+      mysam_subset <- mysam[rownames(mysam) %in% colnames(ko_abun), ]
+      mysam_subset$sample <- rownames(mysam_subset)
+      mysam_subset[[group]] <- as.factor(mysam_subset[[group]])
+
+      # DAA
+      result <- pathway_daa(
+        abundance = ko_abun,
+        metadata = mysam_subset,
+        group = group,
+        daa_method = daa_method,
+        p.adjust = p.adjust.method
+      )
+      if ("feature" %in% colnames(result)) {
+        result <- result[!is.na(result$feature) & result$feature != "", ]
+      }
+      # result is a data.frame/matrix with rownames like "EC:1.1.1.1", "ec_2.7.1.1", "EC1.2.3.4"
+      # result$feature <- sub("(?i)^EC[:_\\-]*", "", result$feature, perl = TRUE)
+
+
+      # Annotate and store result
       annotated <- tryCatch(
-        MicroFun::pathway_annotation(
-          pathway        = pathway,
-          daa_results_df = result,
-          ko_to_kegg     = ko_to_kegg,
-          threshold      = threshold
-        ),
+        {
+          MicroFun::pathway_annotation(
+            pathway        = pathway,
+            daa_results_df = result,
+            ko_to_kegg     = ko_to_kegg,
+            threshold      = threshold,
+
+          )
+        },
         error = function(e) {
-          if (verbose) message("  -> Skipping ", nm, ": ", e$message)
+          message("  -> Skipping ", name, ": ", e$message)
           NULL
         }
       )
-    } else {
+
+    } else if (direction == "function") {
+      # Remove "ko:" from row name (taxon column contains the taxon, rows are KO-specific already)
+      # df1$taxon <- gsub("^ko:", "", df1$taxon)
+      rownames(df1) <- df1[,taxon_level]
+      df1 <- df1[, -which(colnames(df1) == taxon_level)]
+
+      # Prepare metadata
+      mysam_subset <- mysam[rownames(mysam) %in% colnames(df1), ]
+      mysam_subset$sample <- rownames(mysam_subset)
+      mysam_subset[[group]] <- as.factor(mysam_subset[[group]])
+
+      # DAA directly on function-level abundance
+      result <- pathway_daa(
+        abundance = df1,
+        metadata = mysam_subset,
+        group = group,
+        daa_method = daa_method,
+        p.adjust = p.adjust.method
+      )
+      if ("feature" %in% colnames(result)) {
+        result <- result[!is.na(result$feature) & result$feature != "", ]
+      }
+
       annotated <- tryCatch(
         {
           res <- result_annotation(result, threshold = threshold)
-          if (is.null(res) || !nrow(res)) NULL else res
+          if (is.null(res) || nrow(res) == 0) {
+            message("  -> Skipping ", name, ": no significant features found")
+            res <- NULL
+          }
+          res
         },
         error = function(e) {
-          if (verbose) message("  -> Skipping ", nm, ": ", e$message)
+          message("  -> Skipping ", name, ": ", e$message)
           NULL
         }
       )
+
     }
 
-    if (!is.null(annotated) && nrow(annotated)) {
-      all_daa_results[[nm]] <- annotated
+    # 5) Store if non-NULL
+    if (!is.null(annotated)) {
+      all_daa_results[[name]] <- annotated
     }
   }
-
-  if (!length(all_daa_results)) {
-    stop(sprintf(
-      "No statistically significant biomarkers found for any %s.\nTry a less stringent threshold or review your input data.",
-      ifelse(direction == "taxa","taxon","function")
-    ))
+  if (length(all_daa_results) == 0) {
+    stop(sprintf("No statistically significant biomarkers found for any %s.\nTry a less stringent threshold or review your input data.",
+                 ifelse(direction == "taxa", "taxon", "function")))
   }
-
-  all_daa_results
+  return(all_daa_results)
 }
+
+
+
+

@@ -2,7 +2,7 @@
 % Please edit documentation in R/function_box.R
 \name{function_box}
 \alias{function_box}
-\title{Function-level boxplots of pathway contributions}
+\title{Plot Functional Abundance Boxplots for Driving Taxa}
 \usage{
 function_box(
   stratified_path,
@@ -13,50 +13,44 @@ function_box(
 )
 }
 \arguments{
-\item{stratified_path}{Character scalar. Path to the stratified PICRUSt2 output
-(e.g., \code{pred_metagenome_contrib.tsv}), which must contain at least
-the columns \code{sample}, \code{taxon}, \code{function},
-\code{norm_taxon_function_contrib}.}
+\item{stratified_path}{Path to the stratified output file from PICRUSt2 (typically `*_strat.tsv`).}
 
-\item{pathway_sdaa_result}{Named list of results from \code{pathway_sdaa()}.
-Each element should be a data.frame with at least \code{feature} and
-\code{pathway_name} (or \code{feature} only). The list names must correspond
-to taxa labels (e.g., genera).}
+\item{pathway_sdaa_result}{A named list of data.frames containing differential results
+(with `feature` and `pathway_name`) for each taxon.}
 
-\item{physeq}{A \code{phyloseq} object containing both taxonomy information
-(via \code{tax_table}) and sample metadata (via \code{sample_data}).}
+\item{physeq}{A `phyloseq` object containing the microbial abundance table, taxonomy, and sample metadata.}
 
-\item{taxon_level}{Character scalar. Taxonomic rank at which to aggregate
-ASV-level contributions (e.g., \code{"Genus"}). Must be a column in
-\code{phyloseq::tax_table(physeq)}.}
+\item{taxon_level}{A string indicating the taxonomic level to aggregate functions by
+(e.g., `"Genus"`, `"Family"`). Default is `"Genus"`.}
 
-\item{group}{Character scalar. Column name in \code{sample_data(physeq)}
-indicating the grouping variable (e.g., treatment, case/control).}
+\item{group}{A string specifying the sample metadata column used for grouping in boxplots.}
+}
+\value{
+A named list of `ggplot2` boxplot objects, one for each taxon with matching functional results.
 }
 \description{
-Generate per-taxon boxplots of functional contributions (e.g., KO/EC/MetaCyc)
-from stratified PICRUSt2 outputs, grouped by sample metadata categories.
-This function merges ASV-level stratified contributions into a chosen
-taxonomy level (e.g., Genus) and produces boxplots for functions that are
-significant in differential abundance analysis results from
-\code{pathway_sdaa()}.
+This function generates boxplots of stratified functional pathway abundances
+(from PICRUSt2 output) at a specified taxonomic level for each driving taxon,
+grouped by a metadata variable.
+}
+\details{
+This function:
+\itemize{
+  \item Parses PICRUSt2 stratified output and maps ASVs to their taxonomic levels.
+  \item Aggregates function abundances at the taxon level.
+  \item Filters and matches functions found in the user-provided differential result per taxon.
+  \item Generates and returns a list of ggplot boxplots of function abundance by group.
+}
 }
 \examples{
 \dontrun{
-# Example usage
-stratified_path <- "pred_metagenome_contrib.tsv"
-plots <- function_box(
-  stratified_path     = stratified_path,
-  pathway_sdaa_result = sdaa_res,
-  physeq              = physeq_obj,
-  taxon_level         = "Genus",
-  group               = "Group"
+plot_list <- function_box(
+  stratified_path = "ko_metagenome_out/pred_metagenome_unstrat.tsv",
+  pathway_sdaa_result = diff_results,
+  physeq = my_phyloseq,
+  taxon_level = "Genus",
+  group = "disease_status"
 )
-# Access the plot for GenusA
-plots[["GenusA"]]
+plot_list$Bacteroides  # View boxplot for Bacteroides genus
 }
-
-}
-\seealso{
-\code{\link{pathway_sdaa}}, \pkg{phyloseq}, \pkg{ggplot2}
 }

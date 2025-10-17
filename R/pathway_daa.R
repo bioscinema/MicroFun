@@ -20,8 +20,6 @@ NULL
 #' @param group Character string specifying the column name in metadata that contains group information
 #'        for differential abundance analysis.
 #'
-#' @param confounder Optional covariate(s) to adjust for in the differential analysis.
-#'
 #' @param daa_method Character string specifying the method for differential abundance analysis.
 #'        Available choices are:
 #'        \itemize{
@@ -143,7 +141,7 @@ NULL
 #' }
 #'
 #' @export
-pathway_daa <- function(abundance, metadata, group, confounder=NULL,daa_method = "ALDEx2",
+pathway_daa <- function(abundance, metadata, group, daa_method = "ALDEx2",
                         select = NULL, p.adjust = "BH", reference = NULL, ...) {
   # Check if the requested DAA method package is available
   method_packages <- list(
@@ -263,9 +261,9 @@ pathway_daa <- function(abundance, metadata, group, confounder=NULL,daa_method =
     "DESeq2" = perform_deseq2_analysis(abundance_mat, metadata, group, Level),
     "LinDA" = perform_linda_analysis(abundance, metadata, group, reference, Level, length_Level),
     "limma voom" = perform_limma_voom_analysis(abundance_mat, Group, reference, Level, length_Level),
-    "edgeR" = perform_edger_analysis(abundance_mat, Group, confounder, Level, length_Level, test="QLF"),
+    "edgeR" = perform_edger_analysis(abundance_mat, Group, Level, length_Level),
     "metagenomeSeq" = perform_metagenomeseq_analysis(abundance_mat, metadata, group, Level),
-    "Maaslin2" = perform_maaslin2_analysis(abundance_mat, metadata, group, confounder, reference, Level, length_Level),
+    "Maaslin2" = perform_maaslin2_analysis(abundance_mat, metadata, group, reference, Level, length_Level),
     "Lefser" = perform_lefser_analysis(abundance_mat, metadata, group, Level)
   )
 
@@ -479,92 +477,44 @@ perform_limma_voom_analysis <- function(abundance_mat, Group, reference, Level, 
 }
 
 # Helper function: Perform edgeR analysis
-perform_edger_analysis <- function(
-    abundance_mat,
-    Group,
-    confounder = NULL,
-    Level = NULL,
-    length_Level = NULL,
-    test = c("QLF","LRT")   # QLF (recommend) or LRT
-){
-  test <- match.arg(test)
-  message("Running edgeR GLM analysis (adjusting for confounders if provided)...")
+perform_edger_analysis <- function(abundance_mat, Group, Level, length_Level) {
+  message("Running edgeR analysis...")
 
-  # --- Basic checks
-  stopifnot(ncol(abundance_mat) == length(Group))
-  if (!is.null(confounder)) {
-    if (is.vector(confounder)) confounder <- data.frame(confounder = confounder)
-    stopifnot(nrow(confounder) == length(Group))
-  }
+  # Create DGEList object
+  dge <- edgeR::DGEList(counts = round(abundance_mat), group = Group)
+  dge <- edgeR::calcNormFactors(dge)
+  dge <- edgeR::estimateCommonDisp(dge, verbose = TRUE)
 
-  # --- Group & level handling
-  if (is.null(Level)) Level <- levels(factor(Group))
-  Group <- factor(Group, levels = Level)
-  if (is.null(length_Level)) length_Level <- length(Level)
-
-  # --- Design matrix: one column per group (0+Group) + confounders
-  des_df <- data.frame(Group = Group)
-  if (!is.null(confounder)) des_df <- cbind(des_df, confounder)
-  # Convert character columns to factors to avoid accidental numeric coercion
-  is_char <- vapply(des_df, is.character, logical(1))
-  des_df[is_char] <- lapply(des_df[is_char], factor)
-
-  design <- stats::model.matrix(~ 0 + Group + ., data = des_df)
-  # columns like GroupA, GroupB, ... plus any covariate columns
-
-  # --- edgeR GLM pipeline
-  y <- edgeR::DGEList(counts = round(abundance_mat))
-  y <- edgeR::calcNormFactors(y)
-  y <- edgeR::estimateDisp(y, design, robust = TRUE)
-
-  fit <- if (test == "QLF") edgeR::glmQLFit(y, design, robust = TRUE) else edgeR::glmFit(y, design)
-
-  # --- Build pairwise contrasts among groups
-  grp_cols <- grep("^Group", colnames(design), value = TRUE)
-  if (length(grp_cols) < 2) stop("Need at least two groups in 'Group'.")
-
-  lvl <- sub("^Group", "", grp_cols)                 # level names in same order as columns
-  col_by_level <- setNames(grp_cols, lvl)
-
-  # If user says it's a 2-level comparison, do that pair specifically
   if (length_Level == 2) {
-    comb <- list(c(Level[1], Level[2]))
-  } else {
-    comb <- utils::combn(lvl, 2, simplify = FALSE)   # all pairwise
-  }
-
-  out_list <- vector("list", length(comb))
-  for (i in seq_along(comb)) {
-    g1 <- comb[[i]][1]
-    g2 <- comb[[i]][2]
-
-    # contrast = g2 - g1
-    con <- rep(0, ncol(design)); names(con) <- colnames(design)
-    con[col_by_level[g2]] <-  1
-    con[col_by_level[g1]] <- -1
-
-    tt <- if (test == "QLF") edgeR::glmQLFTest(fit, contrast = con) else edgeR::glmLRT(fit, contrast = con)
-    tab <- edgeR::topTags(tt, n = Inf, sort.by = "none")$table
-
-    out_list[[i]] <- data.frame(
-      feature = rownames(tab),
-      method  = paste0("edgeR-", test),
-      group1  = g1,
-      group2  = g2,
-      logFC   = tab$logFC,       # (g2 - g1)
-      logCPM  = tab$logCPM,
-      stat    = if (test == "QLF") tab$F else tab$LR,
-      p_values= tab$PValue,
-      FDR     = tab$FDR,
-      row.names = NULL,
-      check.names = FALSE
+    # Two-group comparison
+    et <- edgeR::exactTest(dge, pair = c(1, 2))
+    results <- data.frame(
+      feature = rownames(abundance_mat),
+      method = "edgeR",
+      group1 = Level[1],
+      group2 = Level[2],
+      p_values = et$table$PValue
     )
+  } else {
+    # Multi-group comparison
+    results_list <- list()
+    combinations <- utils::combn(seq_along(Level), 2)
+
+    for (i in 1:ncol(combinations)) {
+      et <- edgeR::exactTest(dge, pair = combinations[,i])
+      results_list[[i]] <- data.frame(
+        feature = rownames(abundance_mat),
+        method = "edgeR",
+        group1 = Level[combinations[1,i]],
+        group2 = Level[combinations[2,i]],
+        p_values = et$table$PValue
+      )
+    }
+    results <- do.call(rbind, results_list)
   }
 
-  results <- do.call(rbind, out_list)
   return(results)
 }
-
 
 # Helper function: Perform metagenomeSeq analysis
 perform_metagenomeseq_analysis <- function(abundance_mat, metadata, group, Level) {
@@ -626,7 +576,7 @@ perform_metagenomeseq_analysis <- function(abundance_mat, metadata, group, Level
 }
 
 # Helper function: Perform Maaslin2 analysis
-perform_maaslin2_analysis <- function(abundance_mat, metadata, group, confounder,reference, Level, length_Level) {
+perform_maaslin2_analysis <- function(abundance_mat, metadata, group, reference, Level, length_Level) {
   message("Running Maaslin2 analysis...")
 
   # Check if Maaslin2 is available
@@ -653,7 +603,7 @@ perform_maaslin2_analysis <- function(abundance_mat, metadata, group, confounder
       input_metadata = metadata,
       output = output_dir,
       transform = "AST",
-      fixed_effects = c(group, confounder),
+      fixed_effects = group,
       reference = if (length_Level > 2) paste0(group, ",", reference) else NULL,
       normalization = "TSS",
       standardize = TRUE,
