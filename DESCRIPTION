@@ -49,17 +49,14 @@ Imports:
     scales,
     htmlwidgets,
     jsonlite,
-    data.table,
     progress
 Depends: 
-    R (>= 2.10)
+    R (>= 3.5.0)
 Suggests: 
     Biobase,
     KEGGREST,
     ComplexHeatmap,
-    ggplotify,
     BiocGenerics,
-    magrittr,
     utils,
     knitr,
     rmarkdown,

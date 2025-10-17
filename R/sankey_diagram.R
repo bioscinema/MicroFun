@@ -47,7 +47,7 @@
 #' @importFrom htmlwidgets JS onRender
 #' @importFrom jsonlite toJSON
 #' @export
-sankey_diagram <- function(pathway_sdaa_result,
+tax2fun_sankey <- function(pathway_sdaa_result,
                            taxa_list = NULL,
                            node_color   = c(Up = "#ffa551", Down = "#70afdf"),
                            node_neutral = "#999999",

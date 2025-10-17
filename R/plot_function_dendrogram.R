@@ -55,18 +55,6 @@
 #' # p_out$plot
 #' }
 #'
-#' @importFrom dplyr bind_rows distinct transmute mutate group_by arrange slice_head ungroup filter
-#' @importFrom dplyr case_when left_join select
-#' @importFrom tibble tibble
-#' @importFrom stringr str_wrap
-#' @importFrom magrittr %>%
-#' @importFrom RColorBrewer brewer.pal brewer.pal.info
-#' @importFrom scales hue_pal
-#' @importFrom igraph graph_from_data_frame ends E V
-#' @importFrom ggraph ggraph create_layout geom_edge_diagonal geom_node_point geom_node_text
-#' @importFrom ggplot2 scale_colour_manual scale_size_continuous coord_equal theme_void ggtitle expand_limits
-#' @importFrom ggplot2 guide_legend
-#' @importFrom grid unit
 #' @export
 plot_function_dendrogram <- function(pathway_sdaa_result,
                                            taxa_list       = NULL,

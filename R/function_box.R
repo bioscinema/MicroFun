@@ -22,9 +22,7 @@
 #'   \item Generates and returns a list of ggplot boxplots of function abundance by group.
 #' }
 #'
-#' @import ggplot2 phyloseq data.table reshape2
-#' @importFrom utils read.table
-#' @importFrom stats aggregate
+#' @import data.table ggplot2 phyloseq reshape2
 #' @export
 #'
 #' @examples
@@ -85,7 +83,7 @@ function_box <- function(stratified_path, pathway_sdaa_result, physeq, taxon_lev
 
     if (level %in% names(result_list_merged)) {
       # existing table for this level → melt too
-      existing      <- as.data.table(result_list_merged[[level]])
+      existing      <- data.table::as.data.table(result_list_merged[[level]])
       existing_long <- melt(
         existing,
         id.vars       = "function",
@@ -143,7 +141,7 @@ function_box <- function(stratified_path, pathway_sdaa_result, physeq, taxon_lev
     if (nrow(genus_df_long) == 0) next
 
 
-    p <- ggplot(genus_df_long, aes(x = pathway_name, y = abundance, fill = group)) +
+    p <- ggplot(genus_df_long, aes(x = pathway_name, y = abundance, fill = .data[[group]])) +
       geom_boxplot() +
       labs(title = genus, x = "Function", y = "Contribution",fill=group) +
       theme_minimal() +

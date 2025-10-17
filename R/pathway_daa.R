@@ -20,6 +20,8 @@ NULL
 #' @param group Character string specifying the column name in metadata that contains group information
 #'        for differential abundance analysis.
 #'
+#' @param confounder Confounders covariates you want to adjust when doing analysis.
+#'
 #' @param daa_method Character string specifying the method for differential abundance analysis.
 #'        Available choices are:
 #'        \itemize{
@@ -141,7 +143,7 @@ NULL
 #' }
 #'
 #' @export
-pathway_daa <- function(abundance, metadata, group, daa_method = "ALDEx2",
+pathway_daa <- function(abundance, metadata, group, confounder = NULL, daa_method = "ALDEx2",
                         select = NULL, p.adjust = "BH", reference = NULL, ...) {
   # Check if the requested DAA method package is available
   method_packages <- list(
@@ -263,7 +265,7 @@ pathway_daa <- function(abundance, metadata, group, daa_method = "ALDEx2",
     "limma voom" = perform_limma_voom_analysis(abundance_mat, Group, reference, Level, length_Level),
     "edgeR" = perform_edger_analysis(abundance_mat, Group, Level, length_Level),
     "metagenomeSeq" = perform_metagenomeseq_analysis(abundance_mat, metadata, group, Level),
-    "Maaslin2" = perform_maaslin2_analysis(abundance_mat, metadata, group, reference, Level, length_Level),
+    "Maaslin2" = perform_maaslin2_analysis(abundance_mat, metadata, group, confounder, reference, Level, length_Level),
     "Lefser" = perform_lefser_analysis(abundance_mat, metadata, group, Level)
   )
 
@@ -576,7 +578,7 @@ perform_metagenomeseq_analysis <- function(abundance_mat, metadata, group, Level
 }
 
 # Helper function: Perform Maaslin2 analysis
-perform_maaslin2_analysis <- function(abundance_mat, metadata, group, reference, Level, length_Level) {
+perform_maaslin2_analysis <- function(abundance_mat, metadata, group, confounder, reference, Level, length_Level) {
   message("Running Maaslin2 analysis...")
 
   # Check if Maaslin2 is available
@@ -603,7 +605,7 @@ perform_maaslin2_analysis <- function(abundance_mat, metadata, group, reference,
       input_metadata = metadata,
       output = output_dir,
       transform = "AST",
-      fixed_effects = group,
+      fixed_effects = c(group, confounder),
       reference = if (length_Level > 2) paste0(group, ",", reference) else NULL,
       normalization = "TSS",
       standardize = TRUE,

@@ -29,12 +29,6 @@
 #'
 #' @seealso [plot_pathway_logfc_one()]
 #'
-#' @importFrom ggplot2 ggplot aes geom_col coord_flip geom_hline scale_fill_manual labs theme_minimal theme element_text margin
-#' @importFrom dplyr mutate arrange filter slice_head
-#' @importFrom forcats fct_reorder
-#' @importFrom stringr str_wrap
-#' @importFrom rlang .data
-#' @importFrom magrittr %>%
 #' @export
 #'
 plot_pathway_logfc <- function(pathway_sdaa_result,
