@@ -43,20 +43,17 @@
 #'   \item{pathway_name / feature / function}{One of these will be used as the label (in this order).}
 #' }
 #'
-#' @seealso
-#' `plot_pathway_logfc()` for barplots of signed effects; `ggraph::create_layout()`
-#' for dendrogram layouts.
 #'
 #' @examples
 #' \donttest{
 #' # Suppose `res_list` is a named list of per-genus differential tables
 #' # (each with columns like: pathway_name, feature, logFC).
-#' # p_out <- plot_function_dendrogram(res_list, top_n_per_genus = 8)
+#' # p_out <- tax2fun_dendro(res_list, top_n_per_genus = 8)
 #' # p_out$plot
 #' }
 #'
 #' @export
-plot_function_dendrogram <- function(pathway_sdaa_result,
+tax2fun_dendro <- function(pathway_sdaa_result,
                                            taxa_list       = NULL,
                                            top_n_per_genus = 5,
                                            wrap_width      = 36,

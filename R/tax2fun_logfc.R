@@ -22,16 +22,11 @@
 #' @return A named `list` of `ggplot` objects, one per entry of
 #'   `pathway_sdaa_result`. Entries with missing or empty data are omitted.
 #'
-#' @details
-#' Internally calls [plot_pathway_logfc_one()] on each element using
-#' `label_col = "pathway_name"`; when that column is missing or empty the
-#' function falls back to `feature`.
 #'
-#' @seealso [plot_pathway_logfc_one()]
 #'
 #' @export
 #'
-plot_pathway_logfc <- function(pathway_sdaa_result,
+tax2fun_logfc <- function(pathway_sdaa_result,
                                top_n = 15,
                                padj_cutoff = 0.05,
                                wrap_width = 45) {

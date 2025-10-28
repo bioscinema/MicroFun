@@ -127,10 +127,5 @@ out_fun <- pathway_sdaa(
 )
 }
 
-}
-\seealso{
-\code{\link{pathway_daa}},
-  \code{MicroFun::pathway_annotation},
-  \code{result_annotation},
-  \pkg{phyloseq}
+
 }

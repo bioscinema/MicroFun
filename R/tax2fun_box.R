@@ -27,7 +27,7 @@
 #'
 #' @examples
 #' \dontrun{
-#' plot_list <- function_box(
+#' plot_list <- tax2fun_box(
 #'   stratified_path = "ko_metagenome_out/pred_metagenome_unstrat.tsv",
 #'   pathway_sdaa_result = diff_results,
 #'   physeq = my_phyloseq,
@@ -36,7 +36,7 @@
 #' )
 #' plot_list$Bacteroides  # View boxplot for Bacteroides genus
 #' }
-function_box <- function(stratified_path, pathway_sdaa_result, physeq, taxon_level = "Genus", group) {
+tax2fun_box <- function(stratified_path, pathway_sdaa_result, physeq, taxon_level = "Genus", group) {
   # library(ggplot2)
   # library(phyloseq)
   # library(data.table)

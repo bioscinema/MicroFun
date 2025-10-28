@@ -40,8 +40,6 @@ Imports:
     networkD3,
     phyloseq,
     reshape2,
-    forcats,
-    rlang,
     stringr,
     RColorBrewer,
     ggraph,
@@ -60,6 +58,8 @@ Suggests:
     utils,
     knitr,
     rmarkdown,
-    testthat (>= 3.0.0) 
+    testthat (>= 3.0.0),
+    forcats,
+    rlang
 Config/testthat/edition: 3
 VignetteBuilder: knitr

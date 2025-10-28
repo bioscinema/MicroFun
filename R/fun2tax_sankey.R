@@ -1,4 +1,4 @@
-#' Sankey diagram: functions (KO/EC/MetaCyc) → taxa/features
+#' Sankey diagram: functions (KO/EC/MetaCyc) to taxa/features
 #'
 #' Build an interactive Sankey diagram linking functional features (KO, EC, or
 #' MetaCyc IDs) — optionally grouped to higher-level categories — to taxa or
@@ -15,7 +15,7 @@
 #'   \item normalizes function IDs (e.g., strips \code{"ko:"}, \code{"ec:"}),
 #'   \item (optionally) maps IDs to higher-level groups using reference tables
 #'         shipped in \pkg{MicroFun} (\code{inst/extdata/*_reference.RData}),
-#'   \item assembles edges \emph{source → target} (group or function → taxon),
+#'   \item assembles edges \emph{source to target} (group or function → taxon),
 #'   \item scales link width by \eqn{\exp(\mathrm{logFC}) \times 10},
 #'   \item colors links by direction (Up/Down), and
 #'   \item returns an interactive \pkg{networkD3} sankey widget.
@@ -32,7 +32,7 @@
 #' @param pathway Character. Functional namespace of the names in
 #'   \code{pathway_sdaa_result}; one of \code{"KO"}, \code{"EC"}, \code{"MetaCyc"}.
 #' @param group_functions Logical. If \code{TRUE}, map function IDs to higher
-#'   groups before linking to taxa (KO → \code{PathwayL1}; EC/MetaCyc → \code{description}).
+#'   groups before linking to taxa (KO to \code{PathwayL1}; EC/MetaCyc to \code{description}).
 #'   Requires reference files in \pkg{MicroFun}'s \code{inst/extdata}.
 #' @param taxa_list Optional character vector. If provided, keep only edges whose
 #'   \emph{source} (group label or function ID) matches one of these entries.
@@ -60,7 +60,7 @@
 #'                       p_adjust = c(0.01, 0.7))
 #' )
 #'
-#' # Function → taxon (no grouping)
+#' # Function to taxon (no grouping)
 #' p1 <- fun2tax_sankey(sdaa_list, pathway = "KO", group_functions = FALSE)
 #' p1
 #'
@@ -160,7 +160,7 @@ fun2tax_sankey <- function(
     id2group <- load_reference_map(pathway)
   }
 
-  # ---------- build sankey_df (function → taxon, or group → taxon) ----------
+  # ---------- build sankey_df (function to taxon, or group to taxon) ----------
   if (isTRUE(group_functions)) {
     # group by higher-level label first
     grp_lab <- unname(id2group[fun_ids_norm])
@@ -210,7 +210,7 @@ fun2tax_sankey <- function(
     sankey_df <- do.call(rbind, pieces)
 
   } else {
-    # no grouping: function → taxon edges directly
+    # no grouping: function to taxon edges directly
     pieces <- lapply(names(pathway_sdaa_result), function(fid) {
       df <- pathway_sdaa_result[[fid]]
       if (is.null(df) || !is.data.frame(df) || !nrow(df)) return(NULL)
@@ -227,7 +227,7 @@ fun2tax_sankey <- function(
       )
     })
     pieces <- Filter(Negate(is.null), pieces)
-    if (!length(pieces)) stop("No edges produced in function→taxon mode.")
+    if (!length(pieces)) stop("No edges produced in function to taxon mode.")
     sankey_df <- do.call(rbind, pieces)
   }
 

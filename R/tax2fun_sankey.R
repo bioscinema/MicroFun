@@ -41,7 +41,6 @@
 #'   in RStudio Viewer or a web browser, and embedded in R Markdown/Quarto.
 #'
 #'
-#' @seealso \code{\link[networkD3]{sankeyNetwork}}, \code{\link[htmlwidgets]{onRender}}
 #'
 #' @importFrom networkD3 sankeyNetwork
 #' @importFrom htmlwidgets JS onRender

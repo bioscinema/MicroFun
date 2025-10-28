@@ -94,10 +94,6 @@
 #' )
 #' }
 #'
-#' @seealso \code{\link{pathway_daa}},
-#'   \code{MicroFun::pathway_annotation},
-#'   \code{result_annotation},
-#'   \pkg{phyloseq}
 #'
 #' @importFrom data.table dcast fread copy
 #' @importFrom reshape2 melt
@@ -279,7 +275,7 @@ pathway_sdaa <- function(
       sample_ids <- sample_ids[ok]
       g <- g[ok]
 
-      if (length(unique(g[["group"]])) < 2) {
+      if (length(unique(g[[group]])) < 2) {
         if (verbose) message("Skipping ", lvl, " (only one group present).")
         next
       }
@@ -304,8 +300,8 @@ pathway_sdaa <- function(
       if (!nrow(dt)) next
       # aggregate by level x sample
       dt_agg <- dt[, .(norm_taxon_function_contrib = sum(norm_taxon_function_contrib, na.rm = TRUE)),
-                   by = .(row_id = level, sample)]
-      wide <- data.table::dcast(dt_agg, row_id ~ sample, value.var = "norm_taxon_function_contrib", fill = 0)
+                   by = .(taxon = level, sample)]
+      wide <- data.table::dcast(dt_agg, taxon ~ sample, value.var = "norm_taxon_function_contrib", fill = 0)
 
       # keep only samples with metadata
       sample_ids <- intersect(colnames(wide), sample_names)
@@ -314,10 +310,10 @@ pathway_sdaa <- function(
       ok <- !is.na(g)
       present <- present[ok]; g <- g[ok]
 
-      if (length(unique(g)) < 2) next
+      if (length(unique(g[[group]])) < 2) next
       if (length(present) <= min_samples) next
 
-      result_list_subset[[fname]] <- wide[, c("row_id", present), drop = FALSE]
+      result_list_subset[[fname]] <- wide[, c("taxon", present), with = FALSE]
     }
   }
 
@@ -419,8 +415,8 @@ pathway_sdaa <- function(
     } else if (direction == "function") {
       # Remove "ko:" from row name (taxon column contains the taxon, rows are KO-specific already)
       # df1$taxon <- gsub("^ko:", "", df1$taxon)
-      rownames(df1) <- df1[,taxon_level]
-      df1 <- df1[, -which(colnames(df1) == taxon_level)]
+      rownames(df1) <- df1[,"taxon"]
+      df1 <- df1[, -which(colnames(df1) == "taxon")]
 
       # Prepare metadata
       mysam_subset <- mysam[rownames(mysam) %in% colnames(df1), ]

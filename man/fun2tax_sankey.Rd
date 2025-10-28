@@ -2,7 +2,7 @@
 % Please edit documentation in R/fun2tax_sankey.R
 \name{fun2tax_sankey}
 \alias{fun2tax_sankey}
-\title{Sankey diagram: functions (KO/EC/MetaCyc) → taxa/features}
+\title{Sankey diagram: functions (KO/EC/MetaCyc) to taxa/features}
 \usage{
 fun2tax_sankey(
   pathway_sdaa_result,
@@ -31,7 +31,7 @@ Each element is a data frame with columns including:
 \code{pathway_sdaa_result}; one of \code{"KO"}, \code{"EC"}, \code{"MetaCyc"}.}
 
 \item{group_functions}{Logical. If \code{TRUE}, map function IDs to higher
-groups before linking to taxa (KO → \code{PathwayL1}; EC/MetaCyc → \code{description}).
+groups before linking to taxa (KO to \code{PathwayL1}; EC/MetaCyc to \code{description}).
 Requires reference files in \pkg{MicroFun}'s \code{inst/extdata}.}
 
 \item{taxa_list}{Optional character vector. If provided, keep only edges whose
@@ -62,7 +62,7 @@ function:
   \item normalizes function IDs (e.g., strips \code{"ko:"}, \code{"ec:"}),
   \item (optionally) maps IDs to higher-level groups using reference tables
         shipped in \pkg{MicroFun} (\code{inst/extdata/*_reference.RData}),
-  \item assembles edges \emph{source → target} (group or function → taxon),
+  \item assembles edges \emph{source to target} (group or function → taxon),
   \item scales link width by \eqn{\exp(\mathrm{logFC}) \times 10},
   \item colors links by direction (Up/Down), and
   \item returns an interactive \pkg{networkD3} sankey widget.
@@ -86,7 +86,7 @@ sdaa_list <- list(
                       p_adjust = c(0.01, 0.7))
 )
 
-# Function → taxon (no grouping)
+# Function to taxon (no grouping)
 p1 <- fun2tax_sankey(sdaa_list, pathway = "KO", group_functions = FALSE)
 p1
 
