@@ -30,4 +30,4 @@ devtools::install_github("bioscinema/MicroFun")
 
 ## Website
 
-We provide detailed tutorial on 
+We provide a detailed tutorial on [https://bioscinema.github.io/MicroFun_website/]. If you have any issues, please post your questions in the Issue section and we will answer the questions as soon as possible!
