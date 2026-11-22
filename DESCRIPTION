@@ -4,9 +4,9 @@ Title: Analysis and Visualization of Taxon-Stratified 'PICRUSt2' Data
 Version: 0.1.0
 Authors@R: c(
     person("Ruitao", "Liu", email = "rxl761@case.edu", role = "aut"),
-    person("Yaoran", "Yu", email = "yxy1625@case.edu", role = "aut",
-           comment = "Maintainer"),
     person("Chenyu", "Liu", email = "cxl1299@case.edu", role = "aut",
+           comment = "Maintainer"),
+    person("Yaoran", "Yu", email = "yxy1625@case.edu", role = "aut",
            comment = "Maintainer"),
     person("Zilin", "Li", email = "zxl1715@case.edu", role = c("aut", "cre"),
            comment = "Maintainer"),
@@ -23,6 +23,8 @@ URL: https://github.com/bioscinema/MicroFun_0.1.0,
     https://bioscinema.github.io/MicroFun_website_tutorials/
 License: MIT + file LICENSE
 Encoding: UTF-8
+LazyData: true
+LazyDataCompression: xz
 RoxygenNote: 7.3.3
 Imports: ALDEx2, aplot, ape, DESeq2, dplyr, edgeR, GGally, ggplot2,
         grid, ggh4x, lefser, limma, Maaslin2, metagenomeSeq,
@@ -34,11 +36,11 @@ Depends: R (>= 3.5.0)
 Suggests: rsvg, qpdf, KEGGREST, R.utils, svglite
 NeedsCompilation: no
 Author: Ruitao Liu [aut],
-    Yaoran Yu [aut] (Maintainer),
     Chenyu Liu [aut] (Maintainer),
+    Yaoran Yu [aut] (Maintainer),
     Zilin Li [aut, cre] (Maintainer),
     Liangliang Zhang [aut, cph] (Corresponding author)
 Maintainer: Zilin Li <zxl1715@case.edu>
-Maintainers: Yaoran Yu <yxy1625@case.edu>,
-    Chenyu Liu <cxl1299@case.edu>,
+Maintainers: Chenyu Liu <cxl1299@case.edu>,
+    Yaoran Yu <yxy1625@case.edu>,
     Zilin Li <zxl1715@case.edu>

@@ -20,11 +20,17 @@
 #'         or \code{result_annotation()} depending on \code{direction/pathway}.
 #' }
 #'
-#' @param stratified_path Character scalar. Path to the stratified PICRUSt2 file
+#' @param stratified_path Optional character scalar. Path to the stratified PICRUSt2 file
 #'   (tab-delimited) containing columns \code{sample}, \code{taxon},
 #'   \code{function}, and \code{taxon_function_abun}. For inputs without this
 #'   abundance column, \code{norm_taxon_function_contrib} is accepted for
 #'   non-KEGG analyses with a compatible DAA method.
+#'   Supply exactly one of \code{stratified_path} and \code{stratified_data}.
+#' @param stratified_data Optional data frame or data.table containing the same
+#'   columns as a contribution file. This accepts the bundled
+#'   \code{microfun_demo_KO}, \code{microfun_demo_EC}, \code{microfun_demo_KEGG}
+#'   and \code{microfun_demo_MetaCyc} datasets without writing a temporary file.
+#'   The supplied object is not modified.
 #'
 #' @param physeq A \code{phyloseq} object with both \code{tax_table} (ASV rows)
 #'   and \code{sample_data}.
@@ -95,9 +101,10 @@
 #' @seealso [pathway_daa()], [tax2fun_box()], [fun2tax_box()]
 #'
 #' @md
-pathway_sdaa <- function(stratified_path, physeq, taxon_level = "Genus", group, daa_method = "Maaslin2",
+pathway_sdaa <- function(stratified_path = NULL, physeq, taxon_level = "Genus", group, daa_method = "Maaslin2",
   p.adjust.method = "none", threshold = 0.05, direction = "taxa", pathway = "KO", confounders = NULL,
-  reference = NULL, min_samples = 5, verbose = TRUE, kegg_map = NULL, maaslin2_transform = "AST") {
+  reference = NULL, min_samples = 5, verbose = TRUE, kegg_map = NULL, maaslin2_transform = "AST",
+  stratified_data = NULL) {
   if (daa_method == "Maaslin2") {
     maaslin2_transform <- .microfun_maaslin2_transform(maaslin2_transform)
   } else if (!missing(maaslin2_transform)) {
@@ -110,11 +117,7 @@ pathway_sdaa <- function(stratified_path, physeq, taxon_level = "Genus", group, 
   map_ko <- direction == "taxa" && pathway == "KO"
 
   # Read stratified contributions and sample metadata.
-  df <- if (grepl("\\.gz$", stratified_path, ignore.case = TRUE) && !requireNamespace("R.utils", quietly = TRUE)) {
-    con <- gzfile(stratified_path, "rt")
-    on.exit(close(con), add = TRUE)
-    data.table::as.data.table(utils::read.delim(con, check.names = FALSE))
-  } else data.table::fread(stratified_path, sep = "\t")
+  df <- .microfun_read_contributions(stratified_path, stratified_data)
   req_cols <- c("sample", "taxon", "function")
   miss <- setdiff(req_cols, names(df))
   if (length(miss))
@@ -499,4 +502,29 @@ pathway_sdaa <- function(stratified_path, physeq, taxon_level = "Genus", group, 
     value_col = value_col, kegg_map = if (map_ko) kegg_map,
     maaslin2_transform = if (daa_method == "Maaslin2") maaslin2_transform)
   return(all_daa_results)
+}
+
+# Keep the reader separate so file and in-memory inputs share all downstream
+# validation and analysis. Copy tables before any data.table mutation.
+.microfun_read_contributions <- function(stratified_path = NULL, stratified_data = NULL) {
+  if (is.null(stratified_path) == is.null(stratified_data)) {
+    stop("Supply exactly one of stratified_path or stratified_data.")
+  }
+  if (!is.null(stratified_data)) {
+    if (!is.data.frame(stratified_data)) {
+      stop("stratified_data must be a data frame or data.table.")
+    }
+    return(data.table::copy(data.table::as.data.table(stratified_data)))
+  }
+  if (!is.character(stratified_path) || length(stratified_path) != 1L ||
+      is.na(stratified_path) || !nzchar(stratified_path) || !file.exists(stratified_path)) {
+    stop("stratified_path must name an existing contribution file.")
+  }
+  if (grepl("\\.gz$", stratified_path, ignore.case = TRUE) &&
+      !requireNamespace("R.utils", quietly = TRUE)) {
+    con <- gzfile(stratified_path, "rt")
+    on.exit(close(con))
+    return(data.table::as.data.table(utils::read.delim(con, check.names = FALSE)))
+  }
+  data.table::fread(stratified_path, sep = "\t")
 }

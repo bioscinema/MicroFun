@@ -5,7 +5,7 @@
 \title{Stratified pathway-level DAA workflow for PICRUSt2 outputs}
 \usage{
 pathway_sdaa(
-  stratified_path,
+  stratified_path = NULL,
   physeq,
   taxon_level = "Genus",
   group,
@@ -19,15 +19,18 @@ pathway_sdaa(
   min_samples = 5,
   verbose = TRUE,
   kegg_map = NULL,
-  maaslin2_transform = "AST"
+  maaslin2_transform = "AST",
+  stratified_data = NULL
 )
 }
 \arguments{
-\item{stratified_path}{Character scalar. Path to the stratified PICRUSt2 file
+\item{stratified_path}{Optional character scalar. Path to the stratified PICRUSt2 file
 (tab-delimited) containing columns \code{sample}, \code{taxon},
 \code{function}, and \code{taxon_function_abun}. For inputs without this
 abundance column, \code{norm_taxon_function_contrib} is accepted for
-non-KEGG analyses with a compatible DAA method.}
+non-KEGG analyses with a compatible DAA method. Supply exactly one of \code{stratified_path} and \code{stratified_data}.}
+
+\item{stratified_data}{Optional data frame or data.table containing the same columns as a contribution file. Accepts the bundled \code{microfun_demo_KO}, \code{microfun_demo_EC}, \code{microfun_demo_KEGG} and \code{microfun_demo_MetaCyc} datasets. The supplied object is not modified.}
 
 \item{physeq}{A \code{phyloseq} object with both \code{tax_table} (ASV rows)
 and \code{sample_data}.}
