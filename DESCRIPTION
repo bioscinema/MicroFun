@@ -18,8 +18,8 @@ Description: Provides taxon-resolved analysis of functional profiles predicted
     functional contributions. Supports taxonomic aggregation, KEGG Orthology,
     Enzyme Commission and MetaCyc annotations, and visualization using Sankey
     diagrams, chord diagrams, boxplots, dendrograms and effect-size plots.
-BugReports: https://github.com/bioscinema/MicroFun_0.1.0/issues
-URL: https://github.com/bioscinema/MicroFun_0.1.0,
+BugReports: https://github.com/bioscinema/MicroFun/issues
+URL: https://github.com/bioscinema/MicroFun,
     https://bioscinema.github.io/MicroFun_website_tutorials/
 License: MIT + file LICENSE
 Encoding: UTF-8
