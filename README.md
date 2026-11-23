@@ -101,7 +101,7 @@ result_fun <- pathway_sdaa(
 )
 ```
 
-Use `?microfun_demo` and `?microfun_demo_KO` for the data structure and provenance. `data()` loads bundled datasets; `load()` reads a standalone R data file. `pathway_sdaa()` accepts exactly one of `stratified_data` (a loaded table) or `stratified_path` (a file path). Full contribution tables can require substantial memory after loading; use `rm(microfun_demo_KO); gc()` when finished.
+`data()` loads bundled datasets; `load()` reads a standalone R data file. `pathway_sdaa()` accepts exactly one of `stratified_data` (a loaded table) or `stratified_path` (a file path). Full contribution tables can require substantial memory after loading; use `rm(microfun_demo_KO); gc()` when finished.
 
 The source-study data terms and third-party annotation terms must be checked before redistribution. The software MIT license does not establish rights to all derived study data or reference annotations. The original PICRUSt2 version and reference database were not recorded in the supplied files. The dated KEGG table is an alternative snapshot and differs from the package's KO-to-KEGG mapping used by the tutorials.
 
